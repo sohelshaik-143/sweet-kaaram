@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard - Sweet & Karam</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 font-sans">
+
+  <header class="bg-red-700 text-white p-6 text-center">
+    <h1 class="text-4xl font-bold">🍬 Sweet & Karam - Admin Dashboard</h1>
+  </header>
+
+  <main class="container mx-auto my-10 px-4">
+
+    <div class="flex justify-between items-center mb-6">
+      <h2 class="text-2xl font-semibold">All Orders</h2>
+      <a href="/download-excel" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">Download Excel</a>
+    </div>
+
+    <div id="ordersTable" class="overflow-x-auto">
+      <table class="min-w-full bg-white rounded shadow">
+        <thead class="bg-red-700 text-white">
+          <tr>
+            <th class="py-2 px-4">Order ID</th>
+            <th class="py-2 px-4">Name</th>
+            <th class="py-2 px-4">Phone</th>
+            <th class="py-2 px-4">Address</th>
+            <th class="py-2 px-4">Persons</th>
+            <th class="py-2 px-4">Total</th>
+            <th class="py-2 px-4">Status</th>
+            <th class="py-2 px-4">Items</th>
+          </tr>
+        </thead>
+        <tbody id="ordersBody">
+          <!-- Orders will be injected here -->
+        </tbody>
+      </table>
+    </div>
+
+  </main>
+
+  <script>
+    async function loadOrders() {
+      const res = await fetch('/all-orders');
+      const orders = await res.json();
+      const tbody = document.getElementById('ordersBody');
+      tbody.innerHTML = '';
+      orders.slice().reverse().forEach(o => {
+        const tr = document.createElement('tr');
+        tr.className = 'border-b text-center';
+        tr.innerHTML = `
+          <td class="py-2 px-4">${o.orderId}</td>
+          <td class="py-2 px-4">${o.name}</td>
+          <td class="py-2 px-4">${o.phone}</td>
+          <td class="py-2 px-4">${o.address}</td>
+          <td class="py-2 px-4">${o.persons}</td>
+          <td class="py-2 px-4">₹${o.total}</td>
+          <td class="py-2 px-4 font-bold ${o.status.toLowerCase()==='delivered'?'text-green-600': o.status.toLowerCase()==='out for delivery'?'text-blue-600':'text-yellow-600'}">${o.status}</td>
+          <td class="py-2 px-4">${o.items.map(i=>`${i.name} x${i.qty}`).join(', ')}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    loadOrders();
+    setInterval(loadOrders, 10000); // Refresh every 10 sec
+  </script>
+
+</body>
+</html>
