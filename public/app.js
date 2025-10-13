@@ -45,8 +45,6 @@ form.addEventListener('submit', async (e) => {
     persons: form.persons.value,
     total: parseInt(totalEl.textContent),
     items,
-    orderId: Date.now(),
-    status: 'Preparing'
   };
 
   try {
@@ -56,7 +54,8 @@ form.addEventListener('submit', async (e) => {
       body:JSON.stringify(orderData)
     });
     if(res.ok){
-      orderResult.textContent = `✅ Order placed! Your Order ID: ${orderData.orderId}`;
+      const data = await res.json();
+      orderResult.textContent = `✅ Order placed! Your Order ID: ${data.orderId}`;
       form.reset();
       updateTotal();
       loadHistory();
