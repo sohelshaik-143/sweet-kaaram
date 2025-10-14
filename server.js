@@ -7,20 +7,16 @@ const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 5200;
 
-// Excel file path
+// ✅ Excel file path
 const EXCEL_FILE = process.env.EXCEL_PATH || 'orders.xlsx';
 const excelFilePath = path.join(__dirname, EXCEL_FILE);
 
-// Middleware
+// ✅ Middleware
 app.use(bodyParser.json());
-
-// Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
-
-// Serve images from lowercase 'images' folder
 app.use('/images', express.static(path.join(__dirname, 'public', 'images')));
 
-// Read orders from Excel
+// ✅ Read orders from Excel
 function readOrders() {
   if (!fs.existsSync(excelFilePath)) return [];
   const workbook = XLSX.readFile(excelFilePath);
@@ -28,7 +24,7 @@ function readOrders() {
   return XLSX.utils.sheet_to_json(sheet);
 }
 
-// Write orders to Excel
+// ✅ Write orders to Excel
 function writeOrders(data) {
   const workbook = XLSX.utils.book_new();
   const sheet = XLSX.utils.json_to_sheet(data);
@@ -36,54 +32,78 @@ function writeOrders(data) {
   XLSX.writeFile(workbook, excelFilePath);
 }
 
-// Serve homepage
+// ✅ Homepage
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Place an order
+// ✅ Place an order
 app.post('/order', (req, res) => {
-  const orderData = req.body;
-  orderData.orderId = Date.now();
-  orderData.timestamp = new Date().toLocaleString();
-  orderData.status = 'Preparing';
-  orderData.total = orderData.items.reduce(
-    (sum, item) => sum + item.price * item.qty,
-    0
-  );
+  try {
+    const orderData = req.body;
 
-  const orders = readOrders();
-  orders.push(orderData);
-  writeOrders(orders);
+    // Check if order has valid items
+    if (!orderData.items || !Array.isArray(orderData.items) || orderData.items.length === 0) {
+      return res.status(400).json({ error: 'No items in order.' });
+    }
 
-  simulateOrderStatus(orderData.orderId);
+    orderData.orderId = Date.now();
+    orderData.timestamp = new Date().toLocaleString();
+    orderData.status = 'Preparing';
+    orderData.total = orderData.items.reduce((sum, item) => {
+      const price = Number(item.price) || 0;
+      const qty = Number(item.qty) || 0;
+      return sum + price * qty;
+    }, 0);
 
-  res.status(200).json({
-    message: 'Order placed successfully!',
-    orderId: orderData.orderId
-  });
+    const orders = readOrders();
+    orders.push(orderData);
+    writeOrders(orders);
+
+    simulateOrderStatus(orderData.orderId);
+
+    res.status(200).json({
+      message: '✅ Order placed successfully!',
+      orderId: orderData.orderId,
+    });
+  } catch (err) {
+    console.error('❌ Error placing order:', err);
+    res.status(500).json({ error: 'Something went wrong while placing the order.' });
+  }
 });
 
-// Track order
+// ✅ Get all orders
+app.get('/all-orders', (req, res) => {
+  try {
+    const orders = readOrders();
+    res.json(orders);
+  } catch (err) {
+    console.error('❌ Error reading orders:', err);
+    res.status(500).json({ error: 'Failed to fetch orders.' });
+  }
+});
+
+// ✅ Track order by ID
 app.get('/track/:orderId', (req, res) => {
   const { orderId } = req.params;
   const orders = readOrders();
   const order = orders.find(o => String(o.orderId) === String(orderId));
   if (!order) return res.status(404).json({ error: 'Order not found' });
+
   res.json({
     orderId: order.orderId,
     status: order.status,
     timestamp: order.timestamp,
-    total: order.total
+    total: order.total,
   });
 });
 
-// Admin page
+// ✅ Admin page
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
-// Download Excel
+// ✅ Download Excel
 app.get('/download-excel', (req, res) => {
   if (!fs.existsSync(excelFilePath)) {
     return res.status(404).send('No orders found.');
@@ -91,10 +111,11 @@ app.get('/download-excel', (req, res) => {
   res.download(excelFilePath, 'orders.xlsx');
 });
 
-// Simulate order status
+// ✅ Simulate order status updates
 function simulateOrderStatus(orderId) {
   const statuses = ['Preparing', 'Out for Delivery', 'Delivered'];
   let index = 0;
+
   const interval = setInterval(() => {
     const orders = readOrders();
     const orderIndex = orders.findIndex(o => String(o.orderId) === String(orderId));
@@ -105,10 +126,10 @@ function simulateOrderStatus(orderId) {
     orders[orderIndex].status = statuses[index];
     writeOrders(orders);
     index++;
-  }, 10000); // 10 seconds
+  }, 10000); // every 10 seconds
 }
 
-// Start server
+// ✅ Start Server
 app.listen(PORT, () => {
-  console.log(`✅ Server running at http://localhost:${PORT}`);
+  console.log(`🚀 Server running at http://localhost:${PORT}`);
 });

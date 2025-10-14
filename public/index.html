@@ -26,7 +26,7 @@
 
         <!-- Chicken Pickle 100g -->
         <div class="item bg-white rounded-xl shadow-lg p-4 flex flex-col items-center transform hover:scale-105 transition duration-300 animate__animated animate__zoomIn" data-name="Chicken Pickle 100g" data-price="100">
-          <img src="/images/chickenpickle.jpg?v=2" alt="Chicken Pickle 100g" class="w-32 h-32 object-cover rounded-lg mb-3">
+          <img src="/images/chickenpickle.jpg" alt="Chicken Pickle 100g" class="w-32 h-32 object-cover rounded-lg mb-3">
           <h3 class="text-lg font-semibold mb-1 text-center">Chicken Pickle (100 g)</h3>
           <p class="text-red-600 font-bold mb-2">₹100</p>
           <input type="number" min="0" value="0" class="qty border rounded px-2 py-1 w-20 text-center">
@@ -34,7 +34,7 @@
 
         <!-- Chicken Pickle 250g -->
         <div class="item bg-white rounded-xl shadow-lg p-4 flex flex-col items-center transform hover:scale-105 transition duration-300 animate__animated animate__zoomIn" data-name="Chicken Pickle 250g" data-price="250">
-          <img src="/images/chickenpicklee.jpg?v=2" alt="Chicken Pickle 250g" class="w-32 h-32 object-cover rounded-lg mb-3">
+          <img src="/images/chickenpickle.jpg" alt="Chicken Pickle 250g" class="w-32 h-32 object-cover rounded-lg mb-3">
           <h3 class="text-lg font-semibold mb-1 text-center">Chicken Pickle (250 g)</h3>
           <p class="text-red-600 font-bold mb-2">₹250</p>
           <input type="number" min="0" value="0" class="qty border rounded px-2 py-1 w-20 text-center">
@@ -42,15 +42,15 @@
 
         <!-- Gulabjamun -->
         <div class="item bg-white rounded-xl shadow-lg p-4 flex flex-col items-center transform hover:scale-105 transition duration-300 animate__animated animate__zoomIn" data-name="Gulabjamun (Box of 6)" data-price="30">
-          <img src="/images/gulabjamun.jpg?v=2" alt="Gulabjamun" class="w-32 h-32 object-cover rounded-lg mb-3">
+          <img src="/images/gulabjamun.jpg" alt="Gulabjamun" class="w-32 h-32 object-cover rounded-lg mb-3">
           <h3 class="text-lg font-semibold mb-1 text-center">Gulabjamun (Box of 6)</h3>
           <p class="text-red-600 font-bold mb-2">₹30</p>
           <input type="number" min="0" value="0" class="qty border rounded px-2 py-1 w-20 text-center">
         </div>
 
-        <!-- Nuvvula Laddu -->
+        <!-- Black Nuvvula Laddu -->
         <div class="item bg-white rounded-xl shadow-lg p-4 flex flex-col items-center transform hover:scale-105 transition duration-300 animate__animated animate__zoomIn" data-name="Black Nuvvula Laddu (Box of 6)" data-price="30">
-          <img src="/images/nuvvulaladdu.jpg?v=2" alt="Black Nuvvula Laddu" class="w-32 h-32 object-cover rounded-lg mb-3">
+          <img src="/images/nuvvulaladdu.jpg" alt="Black Nuvvula Laddu" class="w-32 h-32 object-cover rounded-lg mb-3">
           <h3 class="text-lg font-semibold mb-1 text-center">Black Nuvvula Laddu (Box of 6)</h3>
           <p class="text-red-600 font-bold mb-2">₹30</p>
           <input type="number" min="0" value="0" class="qty border rounded px-2 py-1 w-20 text-center">
@@ -58,7 +58,7 @@
 
         <!-- Murukulu -->
         <div class="item bg-white rounded-xl shadow-lg p-4 flex flex-col items-center transform hover:scale-105 transition duration-300 animate__animated animate__zoomIn" data-name="Murukulu 150g" data-price="50">
-          <img src="/images/murukulu.jpg?v=2" alt="Murukulu" class="w-32 h-32 object-cover rounded-lg mb-3">
+          <img src="/images/murukulu.jpg" alt="Murukulu" class="w-32 h-32 object-cover rounded-lg mb-3">
           <h3 class="text-lg font-semibold mb-1 text-center">Murukulu 150 g</h3>
           <p class="text-red-600 font-bold mb-2">₹50</p>
           <input type="number" min="0" value="0" class="qty border rounded px-2 py-1 w-20 text-center">
@@ -72,10 +72,9 @@
       <h2 class="text-3xl font-semibold text-center mb-4">Place Order</h2>
       <form id="orderForm" class="flex flex-col gap-4 max-w-md mx-auto">
         <input type="text" name="name" placeholder="Your Name" required class="border rounded px-3 py-2">
-
         <input type="text" name="phone" placeholder="Phone" required class="border rounded px-3 py-2">
         <input type="text" name="address" placeholder="Full Address" required class="border rounded px-3 py-2">
-        <input type="number" name="persons" min="5" max="10" placeholder="Number of persons (5–10)" required class="border rounded px-3 py-2">
+        <input type="number" name="persons" min="1" max="10" placeholder="Number of persons (5–10)" required class="border rounded px-3 py-2">
         <div class="text-center font-bold text-xl">Total: ₹<span id="total">0</span></div>
         <button type="submit" class="bg-red-700 text-white py-3 rounded-xl hover:bg-red-800 transition duration-300">Place Order (COD)</button>
       </form>
