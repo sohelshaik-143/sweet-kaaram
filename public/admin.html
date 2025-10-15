@@ -57,7 +57,6 @@
         const tbody = document.getElementById('ordersBody');
         tbody.innerHTML = '';
 
-        // Reverse so latest shows on top
         orders.slice().reverse().forEach(o => {
           const tr = document.createElement('tr');
           tr.className = 'border-b text-center';
@@ -94,7 +93,7 @@
           tbody.appendChild(tr);
         });
       } catch (err) {
-        console.error('Failed to load orders:', err);
+        console.error('❌ Server error while loading orders:', err);
       }
     }
 
@@ -102,20 +101,30 @@
       const confirmUpdate = confirm(`Mark order ${trackingId} as Delivered?`);
       if (!confirmUpdate) return;
 
-      const res = await fetch('/update-status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trackingId, newStatus: 'Delivered' })
-      });
+      try {
+        const res = await fetch('/update-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trackingId, newStatus: 'Delivered' })
+        });
 
-      const data = await res.json();
-      alert(data.message);
-      loadOrders();
+        const data = await res.json();
+        if (res.ok) {
+          alert(data.message);
+        } else {
+          alert('❌ Failed: ' + data.error);
+        }
+
+        loadOrders(); // refresh after marking delivered
+      } catch (err) {
+        alert('❌ Server error while updating status.');
+        console.error(err);
+      }
     }
 
-    // Initial load and auto refresh every 10 seconds
+    // ✅ Auto-refresh every 5 seconds
     loadOrders();
-    setInterval(loadOrders, 10000);
+    setInterval(loadOrders, 5000);
   </script>
 
 </body>
