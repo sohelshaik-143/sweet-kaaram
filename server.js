@@ -19,7 +19,7 @@ app.use('/images', express.static(path.join(__dirname, 'public', 'images')));
 // Initialize Excel file if not exists
 if (!fs.existsSync(excelFilePath)) {
   const headers = [
-    { "S.No": "S.No", "Date": "Date", "Name": "Name", "Item": "Item", "Quantity": "Quantity", "Amount": "Amount", "Ph no": "Ph no", "Tracking ID": "Tracking ID", "Order Status": "Order Status" }
+    { "S.No": "S.No", "Date": "Date", "Name": "Name", "Item": "Item", "Quantity": "Quantity", "Amount": "Amount", "Ph no": "Ph no", "Tracking ID": "Tracking ID", "Order Status": "Order Status", "Timestamp": "Timestamp" }
   ];
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.json_to_sheet(headers);
@@ -42,8 +42,20 @@ function writeOrders(data) {
   XLSX.writeFile(workbook, excelFilePath);
 }
 
+// Clean orders older than 24 hours
+function cleanOldOrders() {
+  const orders = readOrders();
+  const now = Date.now();
+  const filtered = orders.filter(o => {
+    const ts = o.Timestamp || now;
+    return (now - ts) <= 24 * 60 * 60 * 1000; // 24 hours
+  });
+  writeOrders(filtered);
+}
+
 // Homepage
 app.get('/', (req, res) => {
+  cleanOldOrders();
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
@@ -56,13 +68,13 @@ app.post('/order', (req, res) => {
     }
 
     const orders = readOrders();
-    const sNo = orders.length + 1; // Start from 1
+    const sNo = orders.length + 1;
     const date = new Date().toLocaleDateString('en-GB');
+    const timestamp = Date.now();
 
-    // Generate a unique tracking ID for each order
+    // Unique tracking ID
     const trackingId = `TID${Date.now()}${Math.floor(Math.random() * 1000)}`;
 
-    // Combine items names and quantities
     const itemNames = items.map(i => `${i.item} (x${i.qty})`).join(', ');
     const totalQty = items.reduce((sum, i) => sum + Number(i.qty), 0);
     const totalAmount = items.reduce((sum, i) => sum + Number(i.price) * Number(i.qty), 0);
@@ -76,18 +88,16 @@ app.post('/order', (req, res) => {
       "Amount": totalAmount,
       "Ph no": phone,
       "Tracking ID": trackingId,
-      "Order Status": "Preparing"
+      "Order Status": "Preparing",
+      "Timestamp": timestamp
     };
 
     orders.push(newOrder);
     writeOrders(orders);
 
-    // Simulate status updates
     simulateOrderStatus(trackingId);
 
-    // Send tracking ID back to frontend
     res.json({ message: '✅ Order placed successfully!', trackingId });
-
   } catch (err) {
     console.error('❌ Error placing order:', err);
     res.status(500).json({ error: 'Something went wrong while placing the order.' });
@@ -97,6 +107,7 @@ app.post('/order', (req, res) => {
 // Get all orders
 app.get('/api/orders', (req, res) => {
   try {
+    cleanOldOrders();
     const orders = readOrders();
     res.json(orders);
   } catch (err) {
@@ -166,8 +177,11 @@ function simulateOrderStatus(trackingId) {
     orders[orderIndex]['Order Status'] = statuses[index];
     writeOrders(orders);
     index++;
-  }, 10000); // every 10 seconds
+  }, 10000); // 10s
 }
+
+// Auto-clean old orders every hour
+setInterval(cleanOldOrders, 60 * 60 * 1000); // 1 hour
 
 // Start server
 app.listen(PORT, () => {
