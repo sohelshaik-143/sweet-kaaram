@@ -48,7 +48,7 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// ✅ Place an order
+// ✅ Place an order (fixed to return tracking ID)
 app.post('/order', (req, res) => {
   try {
     const { name, phone, items } = req.body;
@@ -80,7 +80,12 @@ app.post('/order', (req, res) => {
 
     simulateOrderStatus(newOrder["Tracking ID"]);
 
-    res.json({ message: '✅ Order placed successfully!' });
+    // ✅ Return tracking ID for frontend display
+    res.json({ 
+      message: '✅ Order placed successfully!', 
+      trackingId: newOrder["Tracking ID"] 
+    });
+
   } catch (err) {
     console.error('❌ Error placing order:', err);
     res.status(500).json({ error: 'Something went wrong while placing the order.' });
@@ -126,7 +131,7 @@ app.get('/download-excel', (req, res) => {
   res.download(excelFilePath, 'orders.xlsx');
 });
 
-// ✅ 📌 NEW: Manual order status update API
+// ✅ Manual order status update API
 app.post('/update-status', (req, res) => {
   try {
     const { trackingId, newStatus } = req.body;

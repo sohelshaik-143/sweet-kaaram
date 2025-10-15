@@ -99,10 +99,8 @@
     const result = document.getElementById('orderResult');
     const historyContainer = document.getElementById('orderHistory');
 
-    // Update total price dynamically
-    items.forEach(item => {
-      item.querySelector('.qty').addEventListener('input', updateTotal);
-    });
+    // Update total dynamically
+    items.forEach(item => item.querySelector('.qty').addEventListener('input', updateTotal));
 
     function updateTotal() {
       let total = 0;
@@ -115,7 +113,7 @@
     }
 
     // Place order
-    form.addEventListener('submit', async (e) => {
+    form.addEventListener('submit', async e => {
       e.preventDefault();
       const name = form.name.value;
       const phone = form.phone.value;
@@ -124,19 +122,10 @@
       const orderItems = [];
       items.forEach(item => {
         const qty = parseInt(item.querySelector('.qty').value);
-        if (qty > 0) {
-          orderItems.push({
-            item: item.dataset.name,
-            price: item.dataset.price,
-            qty: qty
-          });
-        }
+        if (qty > 0) orderItems.push({ item: item.dataset.name, price: item.dataset.price, qty });
       });
 
-      if (orderItems.length === 0) {
-        alert('Please select at least one item.');
-        return;
-      }
+      if (orderItems.length === 0) return alert('Please select at least one item.');
 
       const response = await fetch('/order', {
         method: 'POST',
@@ -146,7 +135,7 @@
 
       const data = await response.json();
       if (response.ok) {
-        result.textContent = `✅ Order Placed! Tracking ID: ${data.trackingId || 'Check Admin'}`;
+        result.innerHTML = `✅ Order Placed! Tracking ID: <strong>${data.trackingId}</strong>`;
         form.reset();
         updateTotal();
         loadOrders();
@@ -155,12 +144,11 @@
       }
     });
 
-    // Load order history
+    // Load orders
     async function loadOrders() {
       try {
         const res = await fetch('/api/orders');
         const orders = await res.json();
-
         historyContainer.innerHTML = orders.slice().reverse().map(o => `
           <div class="border rounded p-3 shadow-sm bg-yellow-50">
             <div><strong>ID:</strong> ${o['S.No']}</div>
@@ -174,14 +162,13 @@
             <div><strong>Date:</strong> ${o['Date']}</div>
           </div>
         `).join('');
-
       } catch (err) {
-        console.error('❌ Failed to load orders:', err);
+        console.error('Failed to load orders:', err);
         historyContainer.innerHTML = `<div class="text-red-600 font-bold text-center">Failed to load orders.</div>`;
       }
     }
 
-    // Auto-refresh orders every 5 seconds
+    // Auto-refresh every 5 seconds
     setInterval(loadOrders, 5000);
     loadOrders();
   </script>
