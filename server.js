@@ -59,8 +59,11 @@ app.post('/order', (req, res) => {
     const sNo = orders.length + 1; // Start from 1
     const date = new Date().toLocaleDateString('en-GB');
 
-    const item = items[0];
-    const amount = Number(item.price) * Number(item.qty);
+    // Calculate total amount
+    const amount = items.reduce((total, item) => total + Number(item.price) * Number(item.qty), 0);
+
+    // Combine item names and quantities as string
+    const itemNames = items.map(i => `${i.item} (x${i.qty})`).join(', ');
 
     const trackingId = `TID${Date.now()}`;
 
@@ -68,8 +71,8 @@ app.post('/order', (req, res) => {
       "S.No": sNo,
       "Date": date,
       "Name": name,
-      "Item": item.item,
-      "Quantity": item.qty,
+      "Item": itemNames,
+      "Quantity": items.reduce((sum, i) => sum + Number(i.qty), 0),
       "Amount": amount,
       "Ph no": phone,
       "Tracking ID": trackingId,

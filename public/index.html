@@ -112,11 +112,11 @@
     }
 
     // Place order
-    form.addEventListener('submit', async (e) => {
+    form.addEventListener('submit', async e => {
       e.preventDefault();
-      const name = form.name.value;
-      const phone = form.phone.value;
-      const address = form.address.value;
+      const name = form.name.value.trim();
+      const phone = form.phone.value.trim();
+      const address = form.address.value.trim();
 
       const orderItems = [];
       items.forEach(item => {
@@ -129,20 +129,24 @@
         return;
       }
 
-      const response = await fetch('/order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, phone, items: orderItems })
-      });
-
-      const data = await response.json();
-      if (response.ok) {
-        result.textContent = `✅ Order Placed! Tracking ID: ${data.trackingId}`;
-        form.reset();
-        updateTotal();
-        loadOrders();
-      } else {
-        result.textContent = `❌ ${data.error || 'Something went wrong.'}`;
+      try {
+        const response = await fetch('/order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, phone, address, items: orderItems })
+        });
+        const data = await response.json();
+        if (response.ok) {
+          result.textContent = `✅ Order Placed! Tracking ID: ${data.trackingId}`;
+          form.reset();
+          updateTotal();
+          loadOrders();
+        } else {
+          result.textContent = `❌ ${data.error || 'Something went wrong.'}`;
+        }
+      } catch (err) {
+        console.error(err);
+        result.textContent = '❌ Failed to place order.';
       }
     });
 
@@ -165,7 +169,7 @@
           </div>
         `).join('');
       } catch (err) {
-        console.error('❌ Failed to load orders:', err);
+        console.error(err);
         historyContainer.innerHTML = `<div class="text-red-600 font-bold text-center">Failed to load orders.</div>`;
       }
     }
