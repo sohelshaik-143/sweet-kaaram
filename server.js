@@ -88,14 +88,12 @@ app.post('/order', (req, res) => {
       "Amount": totalAmount,
       "Ph no": phone,
       "Tracking ID": trackingId,
-      "Order Status": "Preparing",
+      "Order Status": "Preparing", // default status
       "Timestamp": timestamp
     };
 
     orders.push(newOrder);
     writeOrders(orders);
-
-    simulateOrderStatus(trackingId);
 
     res.json({ message: '✅ Order placed successfully!', trackingId });
   } catch (err) {
@@ -142,7 +140,7 @@ app.get('/download-excel', (req, res) => {
   res.download(excelFilePath, 'orders.xlsx');
 });
 
-// Update order status
+// Update order status (Manual only)
 app.post('/update-status', (req, res) => {
   try {
     const { trackingId, newStatus } = req.body;
@@ -161,24 +159,6 @@ app.post('/update-status', (req, res) => {
     res.status(500).json({ error: 'Failed to update order status.' });
   }
 });
-
-// Simulate order status updates
-function simulateOrderStatus(trackingId) {
-  const statuses = ['Preparing', 'Out for Delivery', 'Delivered'];
-  let index = 0;
-
-  const interval = setInterval(() => {
-    const orders = readOrders();
-    const orderIndex = orders.findIndex(o => String(o['Tracking ID']) === String(trackingId));
-    if (orderIndex === -1 || index >= statuses.length) {
-      clearInterval(interval);
-      return;
-    }
-    orders[orderIndex]['Order Status'] = statuses[index];
-    writeOrders(orders);
-    index++;
-  }, 10000); // 10s
-}
 
 // Auto-clean old orders every hour
 setInterval(cleanOldOrders, 60 * 60 * 1000); // 1 hour
