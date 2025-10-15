@@ -24,39 +24,30 @@
       <h2 class="text-3xl font-semibold text-center mb-6 animate__animated animate__fadeInUp">Our Menu</h2>
       <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
         <!-- Menu items -->
-        <!-- Chicken Pickle 100g -->
         <div class="item bg-white rounded-xl shadow-lg p-4 flex flex-col items-center transform hover:scale-105 transition duration-300 animate__animated animate__zoomIn" data-name="Chicken Pickle 100g" data-price="99">
           <img src="/images/chickenpickle.jpg" alt="Chicken Pickle 100g" class="w-32 h-32 object-cover rounded-lg mb-3">
           <h3 class="text-lg font-semibold mb-1 text-center">Chicken Pickle (100 g)</h3>
           <p class="text-red-600 font-bold mb-2">₹99</p>
           <input type="number" min="0" value="0" class="qty border rounded px-2 py-1 w-20 text-center">
         </div>
-
-        <!-- Chicken Pickle 250g -->
         <div class="item bg-white rounded-xl shadow-lg p-4 flex flex-col items-center transform hover:scale-105 transition duration-300 animate__animated animate__zoomIn" data-name="Chicken Pickle 250g" data-price="199">
           <img src="/images/chickenpickle.jpg" alt="Chicken Pickle 250g" class="w-32 h-32 object-cover rounded-lg mb-3">
           <h3 class="text-lg font-semibold mb-1 text-center">Chicken Pickle (250 g)</h3>
           <p class="text-red-600 font-bold mb-2">₹199</p>
           <input type="number" min="0" value="0" class="qty border rounded px-2 py-1 w-20 text-center">
         </div>
-
-        <!-- Gulabjamun -->
         <div class="item bg-white rounded-xl shadow-lg p-4 flex flex-col items-center transform hover:scale-105 transition duration-300 animate__animated animate__zoomIn" data-name="Gulabjamun (Box of 6)" data-price="30">
           <img src="/images/gulabjamun.jpg" alt="Gulabjamun" class="w-32 h-32 object-cover rounded-lg mb-3">
           <h3 class="text-lg font-semibold mb-1 text-center">Gulabjamun (Box of 6)</h3>
           <p class="text-red-600 font-bold mb-2">₹30</p>
           <input type="number" min="0" value="0" class="qty border rounded px-2 py-1 w-20 text-center">
         </div>
-
-        <!-- Black Nuvvula Laddu -->
         <div class="item bg-white rounded-xl shadow-lg p-4 flex flex-col items-center transform hover:scale-105 transition duration-300 animate__animated animate__zoomIn" data-name="Black Nuvvula Laddu (Box of 6)" data-price="30">
           <img src="/images/nuvvulaladdu.jpg" alt="Black Nuvvula Laddu" class="w-32 h-32 object-cover rounded-lg mb-3">
           <h3 class="text-lg font-semibold mb-1 text-center">Black Nuvvula Laddu (Box of 6)</h3>
           <p class="text-red-600 font-bold mb-2">₹30</p>
           <input type="number" min="0" value="0" class="qty border rounded px-2 py-1 w-20 text-center">
         </div>
-
-        <!-- Murukulu -->
         <div class="item bg-white rounded-xl shadow-lg p-4 flex flex-col items-center transform hover:scale-105 transition duration-300 animate__animated animate__zoomIn" data-name="Murukulu 150g" data-price="50">
           <img src="/images/murukulu.jpg" alt="Murukulu" class="w-32 h-32 object-cover rounded-lg mb-3">
           <h3 class="text-lg font-semibold mb-1 text-center">Murukulu 150 g</h3>
@@ -91,7 +82,7 @@
 
     <!-- Order History -->
     <section class="history mb-16 bg-white p-6 rounded-xl shadow-lg animate__animated animate__fadeInUp">
-      <h2 class="text-3xl font-semibold text-center mb-4">Order History (Last 24h)</h2>
+      <h2 class="text-3xl font-semibold text-center mb-4">Order History</h2>
       <button id="loadHistoryBtn" class="bg-green-600 text-white py-2 px-4 rounded-xl mb-4 hover:bg-green-700 transition duration-300">Load Order History</button>
       <div id="orderHistory" class="flex flex-col gap-4 max-w-3xl mx-auto"></div>
     </section>
@@ -112,7 +103,6 @@
     const trackResult = document.getElementById('trackResult');
     const loadHistoryBtn = document.getElementById('loadHistoryBtn');
 
-    // Update total dynamically
     items.forEach(item => item.querySelector('.qty').addEventListener('input', updateTotal));
     function updateTotal() {
       let total = 0;
@@ -193,9 +183,7 @@
       try {
         const res = await fetch('/api/orders');
         const orders = await res.json();
-        const now = new Date();
-        const last24hOrders = orders.filter(o => (now - new Date(o['Date'])) < 24*60*60*1000);
-        historyContainer.innerHTML = last24hOrders.slice().reverse().map(o => `
+        historyContainer.innerHTML = orders.slice().reverse().map(o => `
           <div class="border rounded p-3 shadow-sm bg-yellow-50">
             <div><strong>ID:</strong> ${o['S.No']}</div>
             <div><strong>Name:</strong> ${o['Name']}</div>

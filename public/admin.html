@@ -89,7 +89,6 @@
               }
             </td>
           `;
-
           tbody.appendChild(tr);
         });
       } catch (err) {
@@ -98,8 +97,7 @@
     }
 
     async function markDelivered(trackingId) {
-      const confirmUpdate = confirm(`Mark order ${trackingId} as Delivered?`);
-      if (!confirmUpdate) return;
+      if (!confirm(`Mark order ${trackingId} as Delivered?`)) return;
 
       try {
         const res = await fetch('/update-status', {
@@ -109,22 +107,19 @@
         });
 
         const data = await res.json();
-        if (res.ok) {
-          alert(data.message);
-        } else {
-          alert('❌ Failed: ' + data.error);
-        }
+        if (res.ok) alert(data.message);
+        else alert('❌ Failed: ' + data.error);
 
-        loadOrders(); // refresh after marking delivered
+        // Reload orders after marking as delivered
+        loadOrders();
       } catch (err) {
         alert('❌ Server error while updating status.');
         console.error(err);
       }
     }
 
-    // ✅ Auto-refresh every 5 seconds
+    // Load orders once on page load (no auto-refresh)
     loadOrders();
-    setInterval(loadOrders, 5000);
   </script>
 
 </body>
