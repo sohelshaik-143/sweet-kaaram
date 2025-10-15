@@ -59,21 +59,21 @@ app.post('/order', (req, res) => {
     const sNo = orders.length + 1; // Start from 1
     const date = new Date().toLocaleDateString('en-GB');
 
-    // Calculate total amount
-    const amount = items.reduce((total, item) => total + Number(item.price) * Number(item.qty), 0);
+    // Generate a unique tracking ID for each order
+    const trackingId = `TID${Date.now()}${Math.floor(Math.random() * 1000)}`;
 
-    // Combine item names and quantities as string
+    // Combine items names and quantities
     const itemNames = items.map(i => `${i.item} (x${i.qty})`).join(', ');
-
-    const trackingId = `TID${Date.now()}`;
+    const totalQty = items.reduce((sum, i) => sum + Number(i.qty), 0);
+    const totalAmount = items.reduce((sum, i) => sum + Number(i.price) * Number(i.qty), 0);
 
     const newOrder = {
       "S.No": sNo,
       "Date": date,
       "Name": name,
       "Item": itemNames,
-      "Quantity": items.reduce((sum, i) => sum + Number(i.qty), 0),
-      "Amount": amount,
+      "Quantity": totalQty,
+      "Amount": totalAmount,
       "Ph no": phone,
       "Tracking ID": trackingId,
       "Order Status": "Preparing"
@@ -82,8 +82,10 @@ app.post('/order', (req, res) => {
     orders.push(newOrder);
     writeOrders(orders);
 
+    // Simulate status updates
     simulateOrderStatus(trackingId);
 
+    // Send tracking ID back to frontend
     res.json({ message: '✅ Order placed successfully!', trackingId });
 
   } catch (err) {
@@ -164,7 +166,7 @@ function simulateOrderStatus(trackingId) {
     orders[orderIndex]['Order Status'] = statuses[index];
     writeOrders(orders);
     index++;
-  }, 10000);
+  }, 10000); // every 10 seconds
 }
 
 // Start server
