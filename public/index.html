@@ -101,7 +101,6 @@
 
     // Update total dynamically
     items.forEach(item => item.querySelector('.qty').addEventListener('input', updateTotal));
-
     function updateTotal() {
       let total = 0;
       items.forEach(item => {
@@ -113,7 +112,7 @@
     }
 
     // Place order
-    form.addEventListener('submit', async e => {
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const name = form.name.value;
       const phone = form.phone.value;
@@ -125,7 +124,10 @@
         if (qty > 0) orderItems.push({ item: item.dataset.name, price: item.dataset.price, qty });
       });
 
-      if (orderItems.length === 0) return alert('Please select at least one item.');
+      if (orderItems.length === 0) {
+        alert('Please select at least one item.');
+        return;
+      }
 
       const response = await fetch('/order', {
         method: 'POST',
@@ -135,7 +137,7 @@
 
       const data = await response.json();
       if (response.ok) {
-        result.innerHTML = `✅ Order Placed! Tracking ID: <strong>${data.trackingId}</strong>`;
+        result.textContent = `✅ Order Placed! Tracking ID: ${data.trackingId}`;
         form.reset();
         updateTotal();
         loadOrders();
@@ -144,7 +146,7 @@
       }
     });
 
-    // Load orders
+    // Load order history live
     async function loadOrders() {
       try {
         const res = await fetch('/api/orders');
@@ -163,14 +165,14 @@
           </div>
         `).join('');
       } catch (err) {
-        console.error('Failed to load orders:', err);
+        console.error('❌ Failed to load orders:', err);
         historyContainer.innerHTML = `<div class="text-red-600 font-bold text-center">Failed to load orders.</div>`;
       }
     }
 
     // Auto-refresh every 5 seconds
-    setInterval(loadOrders, 5000);
     loadOrders();
+    setInterval(loadOrders, 5000);
   </script>
 </body>
 </html>

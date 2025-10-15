@@ -1,4 +1,3 @@
-// ✅ Updated Server Code
 const express = require('express');
 const path = require('path');
 const bodyParser = require('body-parser');
@@ -8,16 +7,16 @@ const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 5200;
 
-// ✅ Excel file path
+// Excel file path
 const EXCEL_FILE = process.env.EXCEL_PATH || 'orders.xlsx';
 const excelFilePath = path.join(__dirname, EXCEL_FILE);
 
-// ✅ Middleware
+// Middleware
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/images', express.static(path.join(__dirname, 'public', 'images')));
 
-// ✅ Initialize Excel file with headers if not exists
+// Initialize Excel file if not exists
 if (!fs.existsSync(excelFilePath)) {
   const headers = [
     { "S.No": "S.No", "Date": "Date", "Name": "Name", "Item": "Item", "Quantity": "Quantity", "Amount": "Amount", "Ph no": "Ph no", "Tracking ID": "Tracking ID", "Order Status": "Order Status" }
@@ -28,14 +27,14 @@ if (!fs.existsSync(excelFilePath)) {
   XLSX.writeFile(wb, excelFilePath);
 }
 
-// ✅ Read orders
+// Read orders
 function readOrders() {
   const workbook = XLSX.readFile(excelFilePath);
   const sheet = workbook.Sheets['Orders'];
   return XLSX.utils.sheet_to_json(sheet);
 }
 
-// ✅ Write orders
+// Write orders
 function writeOrders(data) {
   const workbook = XLSX.utils.book_new();
   const sheet = XLSX.utils.json_to_sheet(data);
@@ -43,12 +42,12 @@ function writeOrders(data) {
   XLSX.writeFile(workbook, excelFilePath);
 }
 
-// ✅ Homepage
+// Homepage
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// ✅ Place an order (fixed to return tracking ID)
+// Place an order
 app.post('/order', (req, res) => {
   try {
     const { name, phone, items } = req.body;
@@ -57,11 +56,13 @@ app.post('/order', (req, res) => {
     }
 
     const orders = readOrders();
-    const sNo = orders.length; // count after header row
+    const sNo = orders.length + 1; // Start from 1
     const date = new Date().toLocaleDateString('en-GB');
 
     const item = items[0];
     const amount = Number(item.price) * Number(item.qty);
+
+    const trackingId = `TID${Date.now()}`;
 
     const newOrder = {
       "S.No": sNo,
@@ -71,20 +72,16 @@ app.post('/order', (req, res) => {
       "Quantity": item.qty,
       "Amount": amount,
       "Ph no": phone,
-      "Tracking ID": `TID${Date.now()}`,
+      "Tracking ID": trackingId,
       "Order Status": "Preparing"
     };
 
     orders.push(newOrder);
     writeOrders(orders);
 
-    simulateOrderStatus(newOrder["Tracking ID"]);
+    simulateOrderStatus(trackingId);
 
-    // ✅ Return tracking ID for frontend display
-    res.json({ 
-      message: '✅ Order placed successfully!', 
-      trackingId: newOrder["Tracking ID"] 
-    });
+    res.json({ message: '✅ Order placed successfully!', trackingId });
 
   } catch (err) {
     console.error('❌ Error placing order:', err);
@@ -92,7 +89,7 @@ app.post('/order', (req, res) => {
   }
 });
 
-// ✅ Get all orders (LIVE DATA)
+// Get all orders
 app.get('/api/orders', (req, res) => {
   try {
     const orders = readOrders();
@@ -103,7 +100,7 @@ app.get('/api/orders', (req, res) => {
   }
 });
 
-// ✅ Track order by tracking ID
+// Track order by tracking ID
 app.get('/track/:trackingId', (req, res) => {
   const { trackingId } = req.params;
   const orders = readOrders();
@@ -118,32 +115,26 @@ app.get('/track/:trackingId', (req, res) => {
   });
 });
 
-// ✅ Admin page (Live Dashboard)
+// Admin page
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
-// ✅ Download Excel (optional)
+// Download Excel
 app.get('/download-excel', (req, res) => {
-  if (!fs.existsSync(excelFilePath)) {
-    return res.status(404).send('No orders found.');
-  }
+  if (!fs.existsSync(excelFilePath)) return res.status(404).send('No orders found.');
   res.download(excelFilePath, 'orders.xlsx');
 });
 
-// ✅ Manual order status update API
+// Update order status
 app.post('/update-status', (req, res) => {
   try {
     const { trackingId, newStatus } = req.body;
-    if (!trackingId || !newStatus) {
-      return res.status(400).json({ error: 'Missing trackingId or newStatus' });
-    }
+    if (!trackingId || !newStatus) return res.status(400).json({ error: 'Missing trackingId or newStatus' });
 
     const orders = readOrders();
     const index = orders.findIndex(o => String(o['Tracking ID']) === String(trackingId));
-    if (index === -1) {
-      return res.status(404).json({ error: 'Order not found' });
-    }
+    if (index === -1) return res.status(404).json({ error: 'Order not found' });
 
     orders[index]['Order Status'] = newStatus;
     writeOrders(orders);
@@ -155,7 +146,7 @@ app.post('/update-status', (req, res) => {
   }
 });
 
-// ✅ Simulate order status updates
+// Simulate order status updates
 function simulateOrderStatus(trackingId) {
   const statuses = ['Preparing', 'Out for Delivery', 'Delivered'];
   let index = 0;
@@ -170,10 +161,10 @@ function simulateOrderStatus(trackingId) {
     orders[orderIndex]['Order Status'] = statuses[index];
     writeOrders(orders);
     index++;
-  }, 10000); // every 10 seconds
+  }, 10000);
 }
 
-// ✅ Start server
+// Start server
 app.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
 });
