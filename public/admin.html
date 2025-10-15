@@ -8,29 +8,37 @@
 </head>
 <body class="bg-gray-100 font-sans">
 
+  <!-- Header -->
   <header class="bg-red-700 text-white p-6 text-center">
     <h1 class="text-4xl font-bold">🍬 Sweet & Karam - Admin Dashboard</h1>
   </header>
 
   <main class="container mx-auto my-10 px-4">
 
+    <!-- Top bar -->
     <div class="flex justify-between items-center mb-6">
       <h2 class="text-2xl font-semibold">All Orders</h2>
-      <a href="/download-excel" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">Download Excel</a>
+      <a href="/download-excel" 
+         class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">
+        ⬇ Download Excel
+      </a>
     </div>
 
+    <!-- Orders Table -->
     <div id="ordersTable" class="overflow-x-auto">
       <table class="min-w-full bg-white rounded shadow">
         <thead class="bg-red-700 text-white">
           <tr>
-            <th class="py-2 px-4">Order ID</th>
+            <th class="py-2 px-4">S.No</th>
+            <th class="py-2 px-4">Date</th>
             <th class="py-2 px-4">Name</th>
             <th class="py-2 px-4">Phone</th>
-            <th class="py-2 px-4">Address</th>
-            <th class="py-2 px-4">Persons</th>
-            <th class="py-2 px-4">Total</th>
+            <th class="py-2 px-4">Item</th>
+            <th class="py-2 px-4">Qty</th>
+            <th class="py-2 px-4">Amount</th>
+            <th class="py-2 px-4">Tracking ID</th>
             <th class="py-2 px-4">Status</th>
-            <th class="py-2 px-4">Items</th>
+            <th class="py-2 px-4">Action</th>
           </tr>
         </thead>
         <tbody id="ordersBody">
@@ -43,29 +51,71 @@
 
   <script>
     async function loadOrders() {
-      const res = await fetch('/all-orders');
-      const orders = await res.json();
-      const tbody = document.getElementById('ordersBody');
-      tbody.innerHTML = '';
-      orders.slice().reverse().forEach(o => {
-        const tr = document.createElement('tr');
-        tr.className = 'border-b text-center';
-        tr.innerHTML = `
-          <td class="py-2 px-4">${o.orderId}</td>
-          <td class="py-2 px-4">${o.name}</td>
-          <td class="py-2 px-4">${o.phone}</td>
-          <td class="py-2 px-4">${o.address}</td>
-          <td class="py-2 px-4">${o.persons}</td>
-          <td class="py-2 px-4">₹${o.total}</td>
-          <td class="py-2 px-4 font-bold ${o.status.toLowerCase()==='delivered'?'text-green-600': o.status.toLowerCase()==='out for delivery'?'text-blue-600':'text-yellow-600'}">${o.status}</td>
-          <td class="py-2 px-4">${o.items.map(i=>`${i.name} x${i.qty}`).join(', ')}</td>
-        `;
-        tbody.appendChild(tr);
-      });
+      try {
+        const res = await fetch('/api/orders');
+        const orders = await res.json();
+        const tbody = document.getElementById('ordersBody');
+        tbody.innerHTML = '';
+
+        // Reverse so latest shows on top
+        orders.slice().reverse().forEach(o => {
+          const tr = document.createElement('tr');
+          tr.className = 'border-b text-center';
+
+          const statusColor =
+            o['Order Status'].toLowerCase() === 'delivered'
+              ? 'text-green-600'
+              : o['Order Status'].toLowerCase() === 'out for delivery'
+              ? 'text-blue-600'
+              : 'text-yellow-600';
+
+          tr.innerHTML = `
+            <td class="py-2 px-4">${o['S.No']}</td>
+            <td class="py-2 px-4">${o['Date']}</td>
+            <td class="py-2 px-4">${o['Name']}</td>
+            <td class="py-2 px-4">${o['Ph no']}</td>
+            <td class="py-2 px-4">${o['Item']}</td>
+            <td class="py-2 px-4">${o['Quantity']}</td>
+            <td class="py-2 px-4">₹${o['Amount']}</td>
+            <td class="py-2 px-4 font-mono">${o['Tracking ID']}</td>
+            <td class="py-2 px-4 font-bold ${statusColor}">${o['Order Status']}</td>
+            <td class="py-2 px-4">
+              ${
+                o['Order Status'] !== 'Delivered'
+                  ? `<button onclick="markDelivered('${o['Tracking ID']}')" 
+                      class="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700">
+                      Mark as Delivered
+                     </button>`
+                  : `<span class="text-gray-500">✅ Done</span>`
+              }
+            </td>
+          `;
+
+          tbody.appendChild(tr);
+        });
+      } catch (err) {
+        console.error('Failed to load orders:', err);
+      }
     }
 
+    async function markDelivered(trackingId) {
+      const confirmUpdate = confirm(`Mark order ${trackingId} as Delivered?`);
+      if (!confirmUpdate) return;
+
+      const res = await fetch('/update-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trackingId, newStatus: 'Delivered' })
+      });
+
+      const data = await res.json();
+      alert(data.message);
+      loadOrders();
+    }
+
+    // Initial load and auto refresh every 10 seconds
     loadOrders();
-    setInterval(loadOrders, 10000); // Refresh every 10 sec
+    setInterval(loadOrders, 10000);
   </script>
 
 </body>

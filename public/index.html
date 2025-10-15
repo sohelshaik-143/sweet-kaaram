@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sweet & Karam 🍬</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
@@ -25,7 +25,7 @@
       <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
 
         <!-- Chicken Pickle 100g -->
-        <div class="item bg-white rounded-xl shadow-lg p-4 flex flex-col items-center transform hover:scale-105 transition duration-300 animate__animated animate__zoomIn" data-name="Chicken Pickle 100g" data-price="100">
+        <div class="item bg-white rounded-xl shadow-lg p-4 flex flex-col items-center transform hover:scale-105 transition duration-300 animate__animated animate__zoomIn" data-name="Chicken Pickle 100g" data-price="99">
           <img src="/images/chickenpickle.jpg" alt="Chicken Pickle 100g" class="w-32 h-32 object-cover rounded-lg mb-3">
           <h3 class="text-lg font-semibold mb-1 text-center">Chicken Pickle (100 g)</h3>
           <p class="text-red-600 font-bold mb-2">₹99</p>
@@ -33,7 +33,7 @@
         </div>
 
         <!-- Chicken Pickle 250g -->
-        <div class="item bg-white rounded-xl shadow-lg p-4 flex flex-col items-center transform hover:scale-105 transition duration-300 animate__animated animate__zoomIn" data-name="Chicken Pickle 250g" data-price="250">
+        <div class="item bg-white rounded-xl shadow-lg p-4 flex flex-col items-center transform hover:scale-105 transition duration-300 animate__animated animate__zoomIn" data-name="Chicken Pickle 250g" data-price="199">
           <img src="/images/chickenpickle.jpg" alt="Chicken Pickle 250g" class="w-32 h-32 object-cover rounded-lg mb-3">
           <h3 class="text-lg font-semibold mb-1 text-center">Chicken Pickle (250 g)</h3>
           <p class="text-red-600 font-bold mb-2">₹199</p>
@@ -48,7 +48,7 @@
           <input type="number" min="0" value="0" class="qty border rounded px-2 py-1 w-20 text-center">
         </div>
 
-        <!-- Black Nuvvula Laddu -->
+        <!-- Nuvvula Laddu -->
         <div class="item bg-white rounded-xl shadow-lg p-4 flex flex-col items-center transform hover:scale-105 transition duration-300 animate__animated animate__zoomIn" data-name="Black Nuvvula Laddu (Box of 6)" data-price="30">
           <img src="/images/nuvvulaladdu.jpg" alt="Black Nuvvula Laddu" class="w-32 h-32 object-cover rounded-lg mb-3">
           <h3 class="text-lg font-semibold mb-1 text-center">Black Nuvvula Laddu (Box of 6)</h3>
@@ -74,7 +74,6 @@
         <input type="text" name="name" placeholder="Your Name" required class="border rounded px-3 py-2">
         <input type="text" name="phone" placeholder="Phone" required class="border rounded px-3 py-2">
         <input type="text" name="address" placeholder="Full Address" required class="border rounded px-3 py-2">
-        <input type="number" name="persons" min="1" max="10" placeholder="Number of persons (1–10)" required class="border rounded px-3 py-2">
         <div class="text-center font-bold text-xl">Total: ₹<span id="total">0</span></div>
         <button type="submit" class="bg-red-700 text-white py-3 rounded-xl hover:bg-red-800 transition duration-300">Place Order (COD)</button>
       </form>
@@ -87,22 +86,94 @@
       <div id="orderHistory" class="flex flex-col gap-4 max-w-3xl mx-auto"></div>
     </section>
 
-    <!-- Live Tracking -->
-    <section class="tracking mb-16 bg-white p-6 rounded-xl shadow-lg animate__animated animate__fadeInUp">
-      <h2 class="text-3xl font-semibold text-center mb-4">Live Tracking</h2>
-      <div class="flex flex-col items-center gap-4 max-w-md mx-auto">
-        <input type="text" id="trackId" placeholder="Enter Order ID" class="border rounded px-3 py-2 w-full text-center">
-        <button id="startTrack" class="bg-red-700 text-white py-2 rounded-xl hover:bg-red-800 transition duration-300 w-full">Track</button>
-        <div id="trackResult" class="mt-4 font-semibold text-lg text-center"></div>
-      </div>
-    </section>
-
   </main>
 
   <footer class="text-center p-4 mt-10 bg-red-700 text-white">
     © 2025 Sweet & Karam. All Rights Reserved.
   </footer>
 
-  <script src="app.js"></script>
+  <script>
+    const items = document.querySelectorAll('.item');
+    const totalElement = document.getElementById('total');
+    const form = document.getElementById('orderForm');
+    const result = document.getElementById('orderResult');
+    const historyContainer = document.getElementById('orderHistory');
+
+    // 🧮 Update total price
+    items.forEach(item => {
+      item.querySelector('.qty').addEventListener('input', updateTotal);
+    });
+
+    function updateTotal() {
+      let total = 0;
+      items.forEach(item => {
+        const price = parseFloat(item.dataset.price);
+        const qty = parseInt(item.querySelector('.qty').value) || 0;
+        total += price * qty;
+      });
+      totalElement.textContent = total;
+    }
+
+    // 📝 Place order
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const name = form.name.value;
+      const phone = form.phone.value;
+      const address = form.address.value;
+
+      const orderItems = [];
+      items.forEach(item => {
+        const qty = parseInt(item.querySelector('.qty').value);
+        if (qty > 0) {
+          orderItems.push({
+            name: item.dataset.name,
+            price: item.dataset.price,
+            qty: qty
+          });
+        }
+      });
+
+      if (orderItems.length === 0) {
+        alert('Please select at least one item.');
+        return;
+      }
+
+      const response = await fetch('/order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, phone, address, items: orderItems })
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        result.textContent = `✅ Order Placed! Your Order ID: ${data.orderId}`;
+        form.reset();
+        updateTotal();
+        loadOrders(); // refresh history
+      } else {
+        result.textContent = `❌ ${data.error || 'Something went wrong.'}`;
+      }
+    });
+
+    // 📊 Load order history
+    async function loadOrders() {
+      const res = await fetch('/all-orders');
+      const orders = await res.json();
+      historyContainer.innerHTML = orders.map(o => `
+        <div class="border rounded p-3 shadow-sm">
+          <div><strong>ID:</strong> ${o.orderId}</div>
+          <div><strong>Name:</strong> ${o.name}</div>
+          <div><strong>Phone:</strong> ${o.phone}</div>
+          <div><strong>Address:</strong> ${o.address}</div>
+          <div><strong>Total:</strong> ₹${o.total}</div>
+          <div><strong>Status:</strong> ${o.status}</div>
+          <div><strong>Time:</strong> ${o.timestamp}</div>
+        </div>
+      `).join('');
+    }
+
+    loadOrders();
+  </script>
 </body>
 </html>
