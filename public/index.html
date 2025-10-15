@@ -99,7 +99,7 @@
     const result = document.getElementById('orderResult');
     const historyContainer = document.getElementById('orderHistory');
 
-    // 🧮 Update total price
+    // Update total price dynamically
     items.forEach(item => {
       item.querySelector('.qty').addEventListener('input', updateTotal);
     });
@@ -114,10 +114,9 @@
       totalElement.textContent = total;
     }
 
-    // 📝 Place order
+    // Place order
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-
       const name = form.name.value;
       const phone = form.phone.value;
       const address = form.address.value;
@@ -127,7 +126,7 @@
         const qty = parseInt(item.querySelector('.qty').value);
         if (qty > 0) {
           orderItems.push({
-            name: item.dataset.name,
+            item: item.dataset.name,
             price: item.dataset.price,
             qty: qty
           });
@@ -142,37 +141,48 @@
       const response = await fetch('/order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, phone, address, items: orderItems })
+        body: JSON.stringify({ name, phone, items: orderItems })
       });
 
       const data = await response.json();
       if (response.ok) {
-        result.textContent = `✅ Order Placed! Your Order ID: ${data.orderId}`;
+        result.textContent = `✅ Order Placed! Tracking ID: ${data.trackingId || 'Check Admin'}`;
         form.reset();
         updateTotal();
-        loadOrders(); // refresh history
+        loadOrders();
       } else {
         result.textContent = `❌ ${data.error || 'Something went wrong.'}`;
       }
     });
 
-    // 📊 Load order history
+    // Load order history
     async function loadOrders() {
-      const res = await fetch('/all-orders');
-      const orders = await res.json();
-      historyContainer.innerHTML = orders.map(o => `
-        <div class="border rounded p-3 shadow-sm">
-          <div><strong>ID:</strong> ${o.orderId}</div>
-          <div><strong>Name:</strong> ${o.name}</div>
-          <div><strong>Phone:</strong> ${o.phone}</div>
-          <div><strong>Address:</strong> ${o.address}</div>
-          <div><strong>Total:</strong> ₹${o.total}</div>
-          <div><strong>Status:</strong> ${o.status}</div>
-          <div><strong>Time:</strong> ${o.timestamp}</div>
-        </div>
-      `).join('');
+      try {
+        const res = await fetch('/api/orders');
+        const orders = await res.json();
+
+        historyContainer.innerHTML = orders.slice().reverse().map(o => `
+          <div class="border rounded p-3 shadow-sm bg-yellow-50">
+            <div><strong>ID:</strong> ${o['S.No']}</div>
+            <div><strong>Name:</strong> ${o['Name']}</div>
+            <div><strong>Phone:</strong> ${o['Ph no']}</div>
+            <div><strong>Item:</strong> ${o['Item']}</div>
+            <div><strong>Quantity:</strong> ${o['Quantity']}</div>
+            <div><strong>Total:</strong> ₹${o['Amount']}</div>
+            <div><strong>Tracking ID:</strong> <code>${o['Tracking ID']}</code></div>
+            <div><strong>Status:</strong> <span class="${o['Order Status']==='Delivered'?'text-green-600':'text-yellow-600'}">${o['Order Status']}</span></div>
+            <div><strong>Date:</strong> ${o['Date']}</div>
+          </div>
+        `).join('');
+
+      } catch (err) {
+        console.error('❌ Failed to load orders:', err);
+        historyContainer.innerHTML = `<div class="text-red-600 font-bold text-center">Failed to load orders.</div>`;
+      }
     }
 
+    // Auto-refresh orders every 5 seconds
+    setInterval(loadOrders, 5000);
     loadOrders();
   </script>
 </body>
