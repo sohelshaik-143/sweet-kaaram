@@ -23,7 +23,7 @@
     <section class="menu mb-16">
       <h2 class="text-3xl font-semibold text-center mb-6 animate__animated animate__fadeInUp">Our Menu</h2>
       <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
-
+        <!-- Menu items -->
         <!-- Chicken Pickle 100g -->
         <div class="item bg-white rounded-xl shadow-lg p-4 flex flex-col items-center transform hover:scale-105 transition duration-300 animate__animated animate__zoomIn" data-name="Chicken Pickle 100g" data-price="99">
           <img src="/images/chickenpickle.jpg" alt="Chicken Pickle 100g" class="w-32 h-32 object-cover rounded-lg mb-3">
@@ -63,7 +63,6 @@
           <p class="text-red-600 font-bold mb-2">₹50</p>
           <input type="number" min="0" value="0" class="qty border rounded px-2 py-1 w-20 text-center">
         </div>
-
       </div>
     </section>
 
@@ -93,6 +92,7 @@
     <!-- Order History -->
     <section class="history mb-16 bg-white p-6 rounded-xl shadow-lg animate__animated animate__fadeInUp">
       <h2 class="text-3xl font-semibold text-center mb-4">Order History (Last 24h)</h2>
+      <button id="loadHistoryBtn" class="bg-green-600 text-white py-2 px-4 rounded-xl mb-4 hover:bg-green-700 transition duration-300">Load Order History</button>
       <div id="orderHistory" class="flex flex-col gap-4 max-w-3xl mx-auto"></div>
     </section>
 
@@ -110,6 +110,7 @@
     const historyContainer = document.getElementById('orderHistory');
     const trackForm = document.getElementById('trackForm');
     const trackResult = document.getElementById('trackResult');
+    const loadHistoryBtn = document.getElementById('loadHistoryBtn');
 
     // Update total dynamically
     items.forEach(item => item.querySelector('.qty').addEventListener('input', updateTotal));
@@ -152,7 +153,6 @@
         result.textContent = `✅ Order Placed! Tracking ID: ${data.trackingId}`;
         form.reset();
         updateTotal();
-        loadOrders();
       } else {
         result.textContent = `❌ ${data.error || 'Something went wrong.'}`;
       }
@@ -188,8 +188,8 @@
       }
     });
 
-    // Load order history (last 24h)
-    async function loadOrders() {
+    // Load order history manually
+    loadHistoryBtn.addEventListener('click', async () => {
       try {
         const res = await fetch('/api/orders');
         const orders = await res.json();
@@ -215,11 +215,7 @@
         console.error('❌ Failed to load orders:', err);
         historyContainer.innerHTML = `<div class="text-red-600 font-bold text-center">Failed to load orders.</div>`;
       }
-    }
-
-    // Auto-refresh every 5 seconds
-    loadOrders();
-    setInterval(loadOrders, 5000);
+    });
   </script>
 </body>
 </html>
