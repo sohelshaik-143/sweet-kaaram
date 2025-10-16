@@ -11,30 +11,44 @@ const PORT = process.env.PORT || 5200;
 const EXCEL_FILE = process.env.EXCEL_PATH || 'orders.xlsx';
 const excelFilePath = path.join(__dirname, EXCEL_FILE);
 
-// Middleware
+// ──────────── Middleware ────────────
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/images', express.static(path.join(__dirname, 'public', 'images')));
 
-// Initialize Excel file if not exists
-if (!fs.existsSync(excelFilePath)) {
-  const headers = [
-    { "S.No": "S.No", "Date": "Date", "Name": "Name", "Item": "Item", "Quantity": "Quantity", "Amount": "Amount", "Ph no": "Ph no", "Tracking ID": "Tracking ID", "Order Status": "Order Status", "Timestamp": "Timestamp" }
-  ];
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.json_to_sheet(headers);
-  XLSX.utils.book_append_sheet(wb, ws, 'Orders');
-  XLSX.writeFile(wb, excelFilePath);
+// ──────────── Initialize Excel ────────────
+function initializeExcel() {
+  if (!fs.existsSync(excelFilePath)) {
+    const headers = [
+      {
+        "S.No": "S.No",
+        "Date": "Date",
+        "Name": "Name",
+        "Item": "Item",
+        "Quantity": "Quantity",
+        "Amount": "Amount",
+        "Ph no": "Ph no",
+        "Tracking ID": "Tracking ID",
+        "Order Status": "Order Status",
+        "Timestamp": "Timestamp"
+      }
+    ];
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(headers);
+    XLSX.utils.book_append_sheet(wb, ws, 'Orders');
+    XLSX.writeFile(wb, excelFilePath);
+    console.log('🆕 Excel file created:', excelFilePath);
+  }
 }
+initializeExcel();
 
-// Read orders
+// ──────────── Helper Functions ────────────
 function readOrders() {
   const workbook = XLSX.readFile(excelFilePath);
   const sheet = workbook.Sheets['Orders'];
   return XLSX.utils.sheet_to_json(sheet);
 }
 
-// Write orders
 function writeOrders(data) {
   const workbook = XLSX.utils.book_new();
   const sheet = XLSX.utils.json_to_sheet(data);
@@ -42,24 +56,25 @@ function writeOrders(data) {
   XLSX.writeFile(workbook, excelFilePath);
 }
 
-// Clean orders older than 24 hours
 function cleanOldOrders() {
   const orders = readOrders();
   const now = Date.now();
   const filtered = orders.filter(o => {
-    const ts = o.Timestamp || now;
+    const ts = Number(o.Timestamp) || now;
     return (now - ts) <= 24 * 60 * 60 * 1000; // 24 hours
   });
   writeOrders(filtered);
 }
 
-// Homepage
+// ──────────── Routes ────────────
+
+// 🏠 Homepage
 app.get('/', (req, res) => {
   cleanOldOrders();
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Place an order
+// 🛒 Place Order
 app.post('/order', (req, res) => {
   try {
     const { name, phone, items } = req.body;
@@ -71,8 +86,6 @@ app.post('/order', (req, res) => {
     const sNo = orders.length + 1;
     const date = new Date().toLocaleDateString('en-GB');
     const timestamp = Date.now();
-
-    // Unique tracking ID
     const trackingId = `TID${Date.now()}${Math.floor(Math.random() * 1000)}`;
 
     const itemNames = items.map(i => `${i.item} (x${i.qty})`).join(', ');
@@ -88,7 +101,7 @@ app.post('/order', (req, res) => {
       "Amount": totalAmount,
       "Ph no": phone,
       "Tracking ID": trackingId,
-      "Order Status": "Preparing", // default status
+      "Order Status": "Preparing",
       "Timestamp": timestamp
     };
 
@@ -102,7 +115,7 @@ app.post('/order', (req, res) => {
   }
 });
 
-// Get all orders
+// 📋 Get All Orders
 app.get('/api/orders', (req, res) => {
   try {
     cleanOldOrders();
@@ -114,7 +127,7 @@ app.get('/api/orders', (req, res) => {
   }
 });
 
-// Track order by tracking ID
+// 🔎 Track Order
 app.get('/track/:trackingId', (req, res) => {
   const { trackingId } = req.params;
   const orders = readOrders();
@@ -124,27 +137,28 @@ app.get('/track/:trackingId', (req, res) => {
   res.json({
     trackingId: order['Tracking ID'],
     status: order['Order Status'],
-    timestamp: order['Date'],
+    date: order['Date'],
     total: order['Amount'],
   });
 });
 
-// Admin page
+// 🧑‍💼 Admin Page
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
-// Download Excel
+// 📥 Download Excel
 app.get('/download-excel', (req, res) => {
   if (!fs.existsSync(excelFilePath)) return res.status(404).send('No orders found.');
   res.download(excelFilePath, 'orders.xlsx');
 });
 
-// Update order status (Manual only)
+// ✏️ Update Order Status
 app.post('/update-status', (req, res) => {
   try {
     const { trackingId, newStatus } = req.body;
-    if (!trackingId || !newStatus) return res.status(400).json({ error: 'Missing trackingId or newStatus' });
+    if (!trackingId || !newStatus)
+      return res.status(400).json({ error: 'Missing trackingId or newStatus' });
 
     const orders = readOrders();
     const index = orders.findIndex(o => String(o['Tracking ID']) === String(trackingId));
@@ -160,10 +174,10 @@ app.post('/update-status', (req, res) => {
   }
 });
 
-// Auto-clean old orders every hour
-setInterval(cleanOldOrders, 60 * 60 * 1000); // 1 hour
+// 🧹 Auto clean old orders every hour
+setInterval(cleanOldOrders, 60 * 60 * 1000);
 
-// Start server
+// 🚀 Start server
 app.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
 });
