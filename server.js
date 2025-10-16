@@ -18,32 +18,37 @@ app.use('/images', express.static(path.join(__dirname, 'public', 'images')));
 
 // ──────────── Initialize Excel ────────────
 function initializeExcel() {
+  const headers = [
+    {
+      "S.No": "S.No",
+      "Date": "Date",
+      "Name": "Name",
+      "Item": "Item",
+      "Quantity": "Quantity",
+      "Amount": "Amount",
+      "Ph no": "Ph no",
+      "Tracking ID": "Tracking ID",
+      "Order Status": "Order Status",
+      "Timestamp": "Timestamp"
+    }
+  ];
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(headers);
+  XLSX.utils.book_append_sheet(wb, ws, 'Orders');
+  XLSX.writeFile(wb, excelFilePath);
+  console.log('🆕 Excel file created:', excelFilePath);
+}
+
+function ensureExcelFile() {
   if (!fs.existsSync(excelFilePath)) {
-    const headers = [
-      {
-        "S.No": "S.No",
-        "Date": "Date",
-        "Name": "Name",
-        "Item": "Item",
-        "Quantity": "Quantity",
-        "Amount": "Amount",
-        "Ph no": "Ph no",
-        "Tracking ID": "Tracking ID",
-        "Order Status": "Order Status",
-        "Timestamp": "Timestamp"
-      }
-    ];
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(headers);
-    XLSX.utils.book_append_sheet(wb, ws, 'Orders');
-    XLSX.writeFile(wb, excelFilePath);
-    console.log('🆕 Excel file created:', excelFilePath);
+    initializeExcel();
   }
 }
-initializeExcel();
+ensureExcelFile();
 
 // ──────────── Helper Functions ────────────
 function readOrders() {
+  ensureExcelFile();
   const workbook = XLSX.readFile(excelFilePath);
   const sheet = workbook.Sheets['Orders'];
   return XLSX.utils.sheet_to_json(sheet);
@@ -171,6 +176,21 @@ app.post('/update-status', (req, res) => {
   } catch (err) {
     console.error('❌ Error updating order status:', err);
     res.status(500).json({ error: 'Failed to update order status.' });
+  }
+});
+
+// 🧽 Manual Reset Orders — Delete & Create New Excel
+app.post('/reset-orders', (req, res) => {
+  try {
+    if (fs.existsSync(excelFilePath)) {
+      fs.unlinkSync(excelFilePath);
+      console.log('🗑️ Old Excel file deleted');
+    }
+    initializeExcel();
+    res.json({ message: '✅ Orders reset successfully. New Excel file created.' });
+  } catch (err) {
+    console.error('❌ Error resetting orders:', err);
+    res.status(500).json({ error: 'Failed to reset orders.' });
   }
 });
 
