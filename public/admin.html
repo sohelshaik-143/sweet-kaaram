@@ -16,12 +16,22 @@
   <main class="container mx-auto my-10 px-4">
 
     <!-- Top bar -->
-    <div class="flex justify-between items-center mb-6">
+    <div class="flex flex-wrap gap-3 justify-between items-center mb-6">
       <h2 class="text-2xl font-semibold">All Orders</h2>
-      <a href="/download-excel" 
-         class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">
-        ⬇ Download Excel
-      </a>
+
+      <div class="flex gap-3">
+        <!-- Download Excel -->
+        <a href="/download-excel" 
+           class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">
+          ⬇ Download Excel
+        </a>
+
+        <!-- Clear Orders Button -->
+        <button onclick="resetOrders()" 
+                class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition">
+          🧽 Clear Orders
+        </button>
+      </div>
     </div>
 
     <!-- Orders Table -->
@@ -50,6 +60,7 @@
   </main>
 
   <script>
+    // Load Orders
     async function loadOrders() {
       try {
         const res = await fetch('/api/orders');
@@ -96,6 +107,7 @@
       }
     }
 
+    // Mark Order as Delivered
     async function markDelivered(trackingId) {
       if (!confirm(`Mark order ${trackingId} as Delivered?`)) return;
 
@@ -110,7 +122,6 @@
         if (res.ok) alert(data.message);
         else alert('❌ Failed: ' + data.error);
 
-        // Reload orders after marking as delivered
         loadOrders();
       } catch (err) {
         alert('❌ Server error while updating status.');
@@ -118,7 +129,30 @@
       }
     }
 
-    // Load orders once on page load (no auto-refresh)
+    // 🧽 Clear All Orders
+    async function resetOrders() {
+      if (!confirm('⚠ Are you sure you want to clear all orders?')) return;
+
+      try {
+        const res = await fetch('/reset-orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          alert(data.message);
+          loadOrders();
+        } else {
+          alert('❌ Failed: ' + data.error);
+        }
+      } catch (err) {
+        alert('❌ Server error while resetting orders.');
+        console.error(err);
+      }
+    }
+
+    // Load orders on page load
     loadOrders();
   </script>
 
