@@ -16,47 +16,38 @@ app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/images', express.static(path.join(__dirname, 'public', 'images')));
 
-// ──────────── Initialize Excel ────────────
+// ──────────── Excel Setup ────────────
+const HEADERS = [
+  "S.No", "Date", "Name", "Item", "Quantity",
+  "Amount", "Ph no", "Tracking ID", "Order Status", "Timestamp"
+];
+
 function initializeExcel() {
-  const headers = [
-    {
-      "S.No": "S.No",
-      "Date": "Date",
-      "Name": "Name",
-      "Item": "Item",
-      "Quantity": "Quantity",
-      "Amount": "Amount",
-      "Ph no": "Ph no",
-      "Tracking ID": "Tracking ID",
-      "Order Status": "Order Status",
-      "Timestamp": "Timestamp"
-    }
-  ];
   const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.json_to_sheet(headers);
+  const ws = XLSX.utils.json_to_sheet([], { header: HEADERS });
+  XLSX.utils.sheet_add_aoa(ws, [HEADERS], { origin: 'A1' }); // Ensure headers
   XLSX.utils.book_append_sheet(wb, ws, 'Orders');
   XLSX.writeFile(wb, excelFilePath);
-  console.log('🆕 Excel file created:', excelFilePath);
+  console.log('🆕 New Excel file created:', excelFilePath);
 }
 
-function ensureExcelFile() {
-  if (!fs.existsSync(excelFilePath)) {
-    initializeExcel();
-  }
+// Automatically delete old Excel and create new one on server start
+if (fs.existsSync(excelFilePath)) {
+  fs.unlinkSync(excelFilePath);
+  console.log('🗑️ Old Excel file deleted');
 }
-ensureExcelFile();
+initializeExcel();
 
 // ──────────── Helper Functions ────────────
 function readOrders() {
-  ensureExcelFile();
   const workbook = XLSX.readFile(excelFilePath);
   const sheet = workbook.Sheets['Orders'];
-  return XLSX.utils.sheet_to_json(sheet);
+  return XLSX.utils.sheet_to_json(sheet, { defval: '' });
 }
 
 function writeOrders(data) {
   const workbook = XLSX.utils.book_new();
-  const sheet = XLSX.utils.json_to_sheet(data);
+  const sheet = XLSX.utils.json_to_sheet(data, { header: HEADERS });
   XLSX.utils.book_append_sheet(workbook, sheet, 'Orders');
   XLSX.writeFile(workbook, excelFilePath);
 }
@@ -72,26 +63,22 @@ function cleanOldOrders() {
 }
 
 // ──────────── Routes ────────────
-
-// 🏠 Homepage
 app.get('/', (req, res) => {
   cleanOldOrders();
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// 🛒 Place Order
 app.post('/order', (req, res) => {
   try {
     const { name, phone, items } = req.body;
-    if (!items || !Array.isArray(items) || items.length === 0) {
+    if (!items || !Array.isArray(items) || items.length === 0)
       return res.status(400).json({ error: 'No items in order.' });
-    }
 
     const orders = readOrders();
     const sNo = orders.length + 1;
     const date = new Date().toLocaleDateString('en-GB');
     const timestamp = Date.now();
-    const trackingId = `TID${Date.now()}${Math.floor(Math.random() * 1000)}`;
+    const trackingId = `TID${timestamp}${Math.floor(Math.random() * 1000)}`;
 
     const itemNames = items.map(i => `${i.item} (x${i.qty})`).join(', ');
     const totalQty = items.reduce((sum, i) => sum + Number(i.qty), 0);
@@ -120,23 +107,19 @@ app.post('/order', (req, res) => {
   }
 });
 
-// 📋 Get All Orders
 app.get('/api/orders', (req, res) => {
   try {
     cleanOldOrders();
-    const orders = readOrders();
-    res.json(orders);
+    res.json(readOrders());
   } catch (err) {
     console.error('❌ Error reading orders:', err);
     res.status(500).json({ error: 'Failed to fetch orders.' });
   }
 });
 
-// 🔎 Track Order
 app.get('/track/:trackingId', (req, res) => {
   const { trackingId } = req.params;
-  const orders = readOrders();
-  const order = orders.find(o => String(o['Tracking ID']) === String(trackingId));
+  const order = readOrders().find(o => String(o['Tracking ID']) === String(trackingId));
   if (!order) return res.status(404).json({ error: 'Order not found' });
 
   res.json({
@@ -147,18 +130,15 @@ app.get('/track/:trackingId', (req, res) => {
   });
 });
 
-// 🧑‍💼 Admin Page
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
-// 📥 Download Excel
 app.get('/download-excel', (req, res) => {
   if (!fs.existsSync(excelFilePath)) return res.status(404).send('No orders found.');
   res.download(excelFilePath, 'orders.xlsx');
 });
 
-// ✏️ Update Order Status
 app.post('/update-status', (req, res) => {
   try {
     const { trackingId, newStatus } = req.body;
@@ -171,7 +151,6 @@ app.post('/update-status', (req, res) => {
 
     orders[index]['Order Status'] = newStatus;
     writeOrders(orders);
-
     res.json({ message: `✅ Order status updated to "${newStatus}"` });
   } catch (err) {
     console.error('❌ Error updating order status:', err);
@@ -179,25 +158,8 @@ app.post('/update-status', (req, res) => {
   }
 });
 
-// 🧽 Manual Reset Orders — Delete & Create New Excel
-app.post('/reset-orders', (req, res) => {
-  try {
-    if (fs.existsSync(excelFilePath)) {
-      fs.unlinkSync(excelFilePath);
-      console.log('🗑️ Old Excel file deleted');
-    }
-    initializeExcel();
-    res.json({ message: '✅ Orders reset successfully. New Excel file created.' });
-  } catch (err) {
-    console.error('❌ Error resetting orders:', err);
-    res.status(500).json({ error: 'Failed to reset orders.' });
-  }
-});
-
-// 🧹 Auto clean old orders every hour
 setInterval(cleanOldOrders, 60 * 60 * 1000);
 
-// 🚀 Start server
 app.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
 });
