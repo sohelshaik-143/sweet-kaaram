@@ -83,10 +83,18 @@ app.post('/reset-orders', (req, res) => {
     res.json({ success: true, message: 'All orders cleared manually.' });
 });
 
+// Download Excel
+app.get('/download-excel', (req, res) => {
+    if (!fs.existsSync(excelFilePath)) return res.status(404).send('Excel file not found');
+    res.download(excelFilePath, 'orders.xlsx', (err) => {
+        if (err) console.error('Error downloading file:', err);
+    });
+});
+
 // ────────────── SOCKET.IO ──────────────
 io.on('connection', (socket) => {
     console.log('Admin connected');
-    socket.emit('all-orders', readOrders()); // Send current Excel orders
+    socket.emit('all-orders', readOrders());
     socket.on('disconnect', () => console.log('Admin disconnected'));
 });
 
