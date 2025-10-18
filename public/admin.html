@@ -88,10 +88,8 @@ function renderOrders(orders) {
   });
 }
 
-// Receive all orders initially
-socket.on('all-orders', (orders) => renderOrders(orders));
-
-// Receive new order in real-time
+// Real-time updates
+socket.on('all-orders', renderOrders);
 socket.on('new-order', (order) => {
   const currentOrders = Array.from(document.getElementById('ordersBody').children).map((tr, idx) => ({
     'S.No': idx + 1,
@@ -108,7 +106,7 @@ socket.on('new-order', (order) => {
   renderOrders(currentOrders);
 });
 
-// Mark as Delivered
+// Mark delivered
 async function markDelivered(trackingId) {
   if (!confirm(`Mark order ${trackingId} as Delivered?`)) return;
   const res = await fetch('/update-status', {
