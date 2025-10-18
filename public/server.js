@@ -1,94 +1,101 @@
-// ------------------- IMPORTS -------------------
 const express = require('express');
-const bodyParser = require('body-parser');
-const fs = require('fs');
 const path = require('path');
+const bodyParser = require('body-parser');
 const XLSX = require('xlsx');
+const fs = require('fs');
 const cors = require('cors');
 
-// ------------------- APP CONFIG -------------------
 const app = express();
-const PORT = process.env.PORT || 4000;
-const ordersFilePath = path.join(__dirname, 'orders.xlsx');
+const PORT = process.env.PORT || 4000; // You can change this port if needed
 
-app.use(bodyParser.json());
 app.use(cors());
-app.use(express.static('public'));
+app.use(bodyParser.json());
+app.use(express.static(path.join(__dirname, 'public')));
 
-// ------------------- ADMIN LOGIN -------------------
-const ADMIN_EMAIL = "admin@sweetkaram.com";
-const ADMIN_PASSWORD = "Admin@123";
+// Excel file path
+const EXCEL_FILE = 'orders.xlsx';
+const excelFilePath = path.join(__dirname, EXCEL_FILE);
 
-// ------------------- INIT EXCEL FILE -------------------
-function initExcelFile() {
-  if (!fs.existsSync(ordersFilePath)) {
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet([]);
-    XLSX.utils.book_append_sheet(wb, ws, 'Orders');
-    XLSX.writeFile(wb, ordersFilePath);
-    console.log('✅ orders.xlsx created');
-  }
-}
-initExcelFile();
-
-// ------------------- ADD ORDER -------------------
-app.post('/order', (req, res) => {
-  const newOrder = req.body;
-  if (!newOrder.email || !newOrder.item || !newOrder.quantity) {
-    return res.status(400).json({ message: 'Invalid order data ❌' });
-  }
-
-  const workbook = XLSX.readFile(ordersFilePath);
-  const worksheet = workbook.Sheets['Orders'];
-  const orders = XLSX.utils.sheet_to_json(worksheet);
-
-  newOrder.timestamp = new Date().toISOString();
-  orders.push(newOrder);
-
-  const updatedWS = XLSX.utils.json_to_sheet(orders);
-  workbook.Sheets['Orders'] = updatedWS;
-  XLSX.writeFile(workbook, ordersFilePath);
-
-  res.json({ message: '✅ Order saved successfully', order: newOrder });
-});
-
-// ------------------- GET ORDERS -------------------
-app.get('/orders', (req, res) => {
-  const workbook = XLSX.readFile(ordersFilePath);
-  const worksheet = workbook.Sheets['Orders'];
-  const orders = XLSX.utils.sheet_to_json(worksheet);
-  res.json(orders);
-});
-
-// ------------------- DELETE ORDERS (ADMIN ONLY) -------------------
-app.post('/admin/delete-orders', (req, res) => {
-  const { email, password } = req.body;
-
-  if (email !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
-    return res.status(403).json({ message: '❌ Unauthorized: Admin only' });
-  }
-
+// Ensure Excel file exists
+if (!fs.existsSync(excelFilePath)) {
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.json_to_sheet([]);
   XLSX.utils.book_append_sheet(wb, ws, 'Orders');
-  XLSX.writeFile(wb, ordersFilePath);
+  XLSX.writeFile(wb, excelFilePath);
+}
 
-  res.json({ message: '🧹 All orders cleared by admin' });
+// 📌 Function to read orders from Excel
+function readOrders() {
+  const wb = XLSX.readFile(excelFilePath);
+  const ws = wb.Sheets['Orders'];
+  return XLSX.utils.sheet_to_json(ws) || [];
+}
+
+// 📌 Function to write orders to Excel (Append without deleting old)
+function writeOrders(orders) {
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(orders);
+  XLSX.utils.book_append_sheet(wb, ws, 'Orders');
+  XLSX.writeFile(wb, excelFilePath);
+}
+
+// ✅ API: Place New Order
+app.post('/api/orders', (req, res) => {
+  try {
+    const newOrder = req.body;
+    const orders = readOrders();
+
+    // Assign unique ID and timestamp
+    newOrder.orderId = `SK${Date.now()}`;
+    newOrder.createdAt = new Date().toISOString();
+
+    orders.push(newOrder);
+    writeOrders(orders);
+
+    res.status(201).json({ message: 'Order placed successfully', orderId: newOrder.orderId });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Failed to place order' });
+  }
 });
 
-// ------------------- LOGIN -------------------
-app.post('/login', (req, res) => {
-  const { email, password } = req.body;
+// ✅ API: Get All Orders
+app.get('/api/orders', (req, res) => {
+  try {
+    const orders = readOrders();
+    res.json(orders);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Failed to fetch orders' });
+  }
+});
 
-  if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
-    return res.json({ success: true, isAdmin: true, message: '✅ Admin login success' });
+// ✅ API: Admin Delete Order (Manual only)
+app.delete('/api/orders/:id', (req, res) => {
+  const { id } = req.params;
+  const { isAdmin } = req.body; // You can replace this with proper auth check later
+
+  if (!isAdmin) {
+    return res.status(403).json({ message: 'Unauthorized: Only admin can delete orders' });
   }
 
-  // For now, every non-admin user is just logged in (no DB)
-  res.json({ success: true, isAdmin: false, message: '✅ User login success' });
+  try {
+    let orders = readOrders();
+    const updatedOrders = orders.filter(order => order.orderId !== id);
+
+    if (updatedOrders.length === orders.length) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    writeOrders(updatedOrders);
+    res.json({ message: 'Order deleted successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Failed to delete order' });
+  }
 });
 
-// ------------------- START SERVER -------------------
+// ✅ Server Start
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`✅ Server running on http://localhost:${PORT}`);
 });
