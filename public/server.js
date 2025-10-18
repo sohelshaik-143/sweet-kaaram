@@ -1,89 +1,94 @@
+// ------------------- IMPORTS -------------------
 const express = require('express');
-const path = require('path');
 const bodyParser = require('body-parser');
-const XLSX = require('xlsx');
 const fs = require('fs');
+const path = require('path');
+const XLSX = require('xlsx');
+const cors = require('cors');
 
+// ------------------- APP CONFIG -------------------
 const app = express();
 const PORT = process.env.PORT || 4000;
+const ordersFilePath = path.join(__dirname, 'orders.xlsx');
 
-// Excel file path
-const EXCEL_FILE = process.env.EXCEL_PATH || 'orders.xlsx';
-const excelFilePath = path.join(__dirname, EXCEL_FILE);
-
-// ──────────── Middleware ────────────
 app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(cors());
+app.use(express.static('public'));
 
-// ──────────── Helper Functions ────────────
+// ------------------- ADMIN LOGIN -------------------
+const ADMIN_EMAIL = "admin@sweetkaram.com";
+const ADMIN_PASSWORD = "Admin@123";
 
-// Create Excel file with headers if it doesn't exist
-function initExcel() {
-  if (!fs.existsSync(excelFilePath)) {
+// ------------------- INIT EXCEL FILE -------------------
+function initExcelFile() {
+  if (!fs.existsSync(ordersFilePath)) {
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet([
-      { orderId: 'Order ID', name: 'Name', email: 'Email', phone: 'Phone', address: 'Address', persons: 'Persons', items: 'Items', total: 'Total', payment: 'Payment', status: 'Status', createdAt: 'Created At' }
-    ]);
+    const ws = XLSX.utils.json_to_sheet([]);
     XLSX.utils.book_append_sheet(wb, ws, 'Orders');
-    XLSX.writeFile(wb, excelFilePath);
+    XLSX.writeFile(wb, ordersFilePath);
+    console.log('✅ orders.xlsx created');
   }
 }
+initExcelFile();
 
-// Read all orders
-function readOrders() {
-  const wb = XLSX.readFile(excelFilePath);
-  const ws = wb.Sheets['Orders'];
-  const data = XLSX.utils.sheet_to_json(ws);
-  return data;
-}
-
-// Write all orders back to the file
-function writeOrders(data) {
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.json_to_sheet(data);
-  XLSX.utils.book_append_sheet(wb, ws, 'Orders');
-  XLSX.writeFile(wb, excelFilePath);
-}
-
-// ──────────── Routes ────────────
-
-// Add new order (User)
-app.post('/api/orders', (req, res) => {
+// ------------------- ADD ORDER -------------------
+app.post('/order', (req, res) => {
   const newOrder = req.body;
-  newOrder.createdAt = new Date().toISOString();
-  newOrder.status = 'Pending';
+  if (!newOrder.email || !newOrder.item || !newOrder.quantity) {
+    return res.status(400).json({ message: 'Invalid order data ❌' });
+  }
 
-  const orders = readOrders();
+  const workbook = XLSX.readFile(ordersFilePath);
+  const worksheet = workbook.Sheets['Orders'];
+  const orders = XLSX.utils.sheet_to_json(worksheet);
+
+  newOrder.timestamp = new Date().toISOString();
   orders.push(newOrder);
-  writeOrders(orders);
 
-  res.status(201).json({ message: 'Order saved successfully', order: newOrder });
+  const updatedWS = XLSX.utils.json_to_sheet(orders);
+  workbook.Sheets['Orders'] = updatedWS;
+  XLSX.writeFile(workbook, ordersFilePath);
+
+  res.json({ message: '✅ Order saved successfully', order: newOrder });
 });
 
-// Get all orders (Admin)
-app.get('/api/orders', (req, res) => {
-  const orders = readOrders();
+// ------------------- GET ORDERS -------------------
+app.get('/orders', (req, res) => {
+  const workbook = XLSX.readFile(ordersFilePath);
+  const worksheet = workbook.Sheets['Orders'];
+  const orders = XLSX.utils.sheet_to_json(worksheet);
   res.json(orders);
 });
 
-// Delete order by ID (Only Admin)
-app.delete('/api/orders/:orderId', (req, res) => {
-  const { orderId } = req.params;
-  let orders = readOrders();
+// ------------------- DELETE ORDERS (ADMIN ONLY) -------------------
+app.post('/admin/delete-orders', (req, res) => {
+  const { email, password } = req.body;
 
-  const index = orders.findIndex(o => String(o.orderId) === String(orderId));
-  if (index === -1) {
-    return res.status(404).json({ message: 'Order not found' });
+  if (email !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
+    return res.status(403).json({ message: '❌ Unauthorized: Admin only' });
   }
 
-  orders.splice(index, 1);
-  writeOrders(orders);
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet([]);
+  XLSX.utils.book_append_sheet(wb, ws, 'Orders');
+  XLSX.writeFile(wb, ordersFilePath);
 
-  res.json({ message: 'Order deleted successfully by admin' });
+  res.json({ message: '🧹 All orders cleared by admin' });
 });
 
-// ──────────── Start Server ────────────
-initExcel();
+// ------------------- LOGIN -------------------
+app.post('/login', (req, res) => {
+  const { email, password } = req.body;
+
+  if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+    return res.json({ success: true, isAdmin: true, message: '✅ Admin login success' });
+  }
+
+  // For now, every non-admin user is just logged in (no DB)
+  res.json({ success: true, isAdmin: false, message: '✅ User login success' });
+});
+
+// ------------------- START SERVER -------------------
 app.listen(PORT, () => {
-  console.log(`🚀 Server running at http://localhost:${PORT}`);
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
