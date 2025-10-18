@@ -4,8 +4,12 @@ const path = require('path');
 const bodyParser = require('body-parser');
 const XLSX = require('xlsx');
 const fs = require('fs');
+const http = require('http');
+const { Server } = require('socket.io');
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
 const PORT = process.env.PORT || 5200;
 
 // ────────────── EXCEL FILE CONFIG ──────────────
@@ -15,11 +19,9 @@ const excelFilePath = path.join(__dirname, EXCEL_FILE);
 // ────────────── MIDDLEWARE ──────────────
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, 'public'))); // For frontend/admin
+app.use(express.static(path.join(__dirname, 'public')));
 
 // ────────────── HELPER FUNCTIONS ──────────────
-
-// Read existing orders from Excel
 function readOrders() {
     if (!fs.existsSync(excelFilePath)) return [];
     const workbook = XLSX.readFile(excelFilePath);
@@ -28,7 +30,6 @@ function readOrders() {
     return XLSX.utils.sheet_to_json(worksheet);
 }
 
-// Save orders to Excel (appends new orders)
 function saveOrders(orders) {
     const workbook = XLSX.utils.book_new();
     const worksheet = XLSX.utils.json_to_sheet(orders);
@@ -38,37 +39,67 @@ function saveOrders(orders) {
 
 // ────────────── ROUTES ──────────────
 
-// Home route
+// Home
 app.get('/', (req, res) => {
-    res.send('Server is running. Use /admin to view orders.');
+    res.send('Server running. Visit /admin for dashboard.');
 });
 
 // Add new order
 app.post('/order', (req, res) => {
-    const newOrder = req.body;
-
-    // Read existing orders
-    const existingOrders = readOrders();
-
-    // Append new order
-    existingOrders.push({
-        ...newOrder,
+    const newOrder = {
+        ...req.body,
         createdAt: new Date().toISOString()
-    });
+    };
 
-    // Save back to Excel
+    const existingOrders = readOrders();
+    existingOrders.push(newOrder);
     saveOrders(existingOrders);
 
+    io.emit('new-order', newOrder); // Real-time update
     res.json({ success: true, message: 'Order added successfully.' });
 });
 
-// Admin dashboard to view orders
+// Admin dashboard HTML
 app.get('/admin', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public/admin.html'));
+});
+
+// API route to get all orders
+app.get('/api/orders', (req, res) => {
     const orders = readOrders();
-    res.json({ orders });
+    res.json(orders);
+});
+
+// Mark order as delivered
+app.post('/update-status', (req, res) => {
+    const { trackingId, newStatus } = req.body;
+    const orders = readOrders();
+    const order = orders.find(o => o['Tracking ID'] === trackingId);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+
+    order['Order Status'] = newStatus;
+    saveOrders(orders);
+    io.emit('all-orders', orders); // Update dashboard
+    res.json({ success: true, message: `Order ${trackingId} marked as ${newStatus}` });
+});
+
+// Clear all orders manually
+app.post('/reset-orders', (req, res) => {
+    saveOrders([]);
+    io.emit('all-orders', []);
+    res.json({ success: true, message: 'All orders cleared manually.' });
+});
+
+// ────────────── SOCKET.IO CONNECTION ──────────────
+io.on('connection', (socket) => {
+    console.log('Admin connected');
+    socket.emit('all-orders', readOrders());
+    socket.on('disconnect', () => {
+        console.log('Admin disconnected');
+    });
 });
 
 // ────────────── START SERVER ──────────────
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+server.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
 });
