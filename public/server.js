@@ -1,101 +1,74 @@
+// ────────────── SERVER SETUP ──────────────
 const express = require('express');
 const path = require('path');
 const bodyParser = require('body-parser');
 const XLSX = require('xlsx');
 const fs = require('fs');
-const cors = require('cors');
 
 const app = express();
-const PORT = process.env.PORT || 4000; // You can change this port if needed
+const PORT = process.env.PORT || 5200;
 
-app.use(cors());
-app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname, 'public')));
-
-// Excel file path
+// ────────────── EXCEL FILE CONFIG ──────────────
 const EXCEL_FILE = 'orders.xlsx';
 const excelFilePath = path.join(__dirname, EXCEL_FILE);
 
-// Ensure Excel file exists
-if (!fs.existsSync(excelFilePath)) {
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.json_to_sheet([]);
-  XLSX.utils.book_append_sheet(wb, ws, 'Orders');
-  XLSX.writeFile(wb, excelFilePath);
-}
+// ────────────── MIDDLEWARE ──────────────
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname, 'public'))); // For frontend/admin
 
-// 📌 Function to read orders from Excel
+// ────────────── HELPER FUNCTIONS ──────────────
+
+// Read existing orders from Excel
 function readOrders() {
-  const wb = XLSX.readFile(excelFilePath);
-  const ws = wb.Sheets['Orders'];
-  return XLSX.utils.sheet_to_json(ws) || [];
+    if (!fs.existsSync(excelFilePath)) return [];
+    const workbook = XLSX.readFile(excelFilePath);
+    const worksheet = workbook.Sheets['Orders'];
+    if (!worksheet) return [];
+    return XLSX.utils.sheet_to_json(worksheet);
 }
 
-// 📌 Function to write orders to Excel (Append without deleting old)
-function writeOrders(orders) {
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.json_to_sheet(orders);
-  XLSX.utils.book_append_sheet(wb, ws, 'Orders');
-  XLSX.writeFile(wb, excelFilePath);
+// Save orders to Excel (appends new orders)
+function saveOrders(orders) {
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(orders);
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders');
+    XLSX.writeFile(workbook, excelFilePath);
 }
 
-// ✅ API: Place New Order
-app.post('/api/orders', (req, res) => {
-  try {
+// ────────────── ROUTES ──────────────
+
+// Home route
+app.get('/', (req, res) => {
+    res.send('Server is running. Use /admin to view orders.');
+});
+
+// Add new order
+app.post('/order', (req, res) => {
     const newOrder = req.body;
+
+    // Read existing orders
+    const existingOrders = readOrders();
+
+    // Append new order
+    existingOrders.push({
+        ...newOrder,
+        createdAt: new Date().toISOString()
+    });
+
+    // Save back to Excel
+    saveOrders(existingOrders);
+
+    res.json({ success: true, message: 'Order added successfully.' });
+});
+
+// Admin dashboard to view orders
+app.get('/admin', (req, res) => {
     const orders = readOrders();
-
-    // Assign unique ID and timestamp
-    newOrder.orderId = `SK${Date.now()}`;
-    newOrder.createdAt = new Date().toISOString();
-
-    orders.push(newOrder);
-    writeOrders(orders);
-
-    res.status(201).json({ message: 'Order placed successfully', orderId: newOrder.orderId });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Failed to place order' });
-  }
+    res.json({ orders });
 });
 
-// ✅ API: Get All Orders
-app.get('/api/orders', (req, res) => {
-  try {
-    const orders = readOrders();
-    res.json(orders);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Failed to fetch orders' });
-  }
-});
-
-// ✅ API: Admin Delete Order (Manual only)
-app.delete('/api/orders/:id', (req, res) => {
-  const { id } = req.params;
-  const { isAdmin } = req.body; // You can replace this with proper auth check later
-
-  if (!isAdmin) {
-    return res.status(403).json({ message: 'Unauthorized: Only admin can delete orders' });
-  }
-
-  try {
-    let orders = readOrders();
-    const updatedOrders = orders.filter(order => order.orderId !== id);
-
-    if (updatedOrders.length === orders.length) {
-      return res.status(404).json({ message: 'Order not found' });
-    }
-
-    writeOrders(updatedOrders);
-    res.json({ message: 'Order deleted successfully' });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Failed to delete order' });
-  }
-});
-
-// ✅ Server Start
+// ────────────── START SERVER ──────────────
 app.listen(PORT, () => {
-  console.log(`✅ Server running on http://localhost:${PORT}`);
+    console.log(`Server is running on port ${PORT}`);
 });
