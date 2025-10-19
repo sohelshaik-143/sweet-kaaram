@@ -26,13 +26,37 @@ function readOrders() {
   const workbook = XLSX.readFile(excelFilePath);
   const worksheet = workbook.Sheets['Orders'];
   if (!worksheet) return [];
-  return XLSX.utils.sheet_to_json(worksheet);
+
+  const orders = XLSX.utils.sheet_to_json(worksheet);
+
+  // Parse items back to array and calculate total amount
+  return orders.map(order => {
+    if (order.items && typeof order.items === 'string') {
+      try {
+        order.items = JSON.parse(order.items);
+      } catch (err) {
+        order.items = [];
+      }
+    } else if (!order.items) {
+      order.items = [];
+    }
+
+    // Calculate total amount
+    order.totalAmount = order.items.reduce((sum, item) => sum + (item.price * item.qty), 0);
+    return order;
+  });
 }
 
 // Save orders to Excel
 function saveOrders(orders) {
+  // Convert items array to string before saving
+  const ordersToSave = orders.map(order => ({
+    ...order,
+    items: order.items ? JSON.stringify(order.items) : '[]'
+  }));
+
   const workbook = XLSX.utils.book_new();
-  const worksheet = XLSX.utils.json_to_sheet(orders);
+  const worksheet = XLSX.utils.json_to_sheet(ordersToSave);
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders');
   XLSX.writeFile(workbook, excelFilePath);
 }
@@ -59,6 +83,10 @@ app.post('/order', (req, res) => {
     'Order Status': 'Pending',
     createdAt: new Date().toISOString()
   };
+
+  // Ensure items array exists
+  if (!Array.isArray(newOrder.items)) newOrder.items = [];
+
   appendOrder(newOrder);
   io.emit('new-order', newOrder); // live broadcast
   res.json({ success: true, orderId: newOrder['Tracking ID'] });
