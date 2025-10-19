@@ -49,12 +49,12 @@ form.addEventListener('submit', async (e) => {
   }
 
   const orderData = {
-    name: form.name.value,
-    phone: form.phone.value,
-    address: form.address.value,
-    persons: form.persons.value,
+    name: form.name.value.trim(),
+    phone: form.phone.value.trim(),
+    address: form.address.value.trim(),
+    persons: form.persons.value.trim(),
     total: parseInt(totalEl.textContent),
-    items,
+    items
   };
 
   try {
@@ -64,15 +64,15 @@ form.addEventListener('submit', async (e) => {
       body: JSON.stringify(orderData)
     });
 
+    const data = await res.json();
     if (res.ok) {
-      const data = await res.json();
-      orderResult.textContent = `✅ Order placed successfully! Order ID: ${data.orderId}`;
+      orderResult.textContent = `✅ Order placed successfully!`;
       orderResult.className = 'text-green-600 font-semibold';
       form.reset();
       updateTotal();
       loadHistory();
     } else {
-      orderResult.textContent = '❌ Failed to place order';
+      orderResult.textContent = `❌ ${data.message || 'Failed to place order'}`;
       orderResult.className = 'text-red-600 font-semibold';
     }
   } catch (err) {
@@ -87,24 +87,36 @@ form.addEventListener('submit', async (e) => {
 // ========================
 async function loadHistory() {
   try {
-    const res = await fetch('/all-orders');
+    const res = await fetch('/api/orders');
     if (res.ok) {
       const orders = await res.json();
       historyEl.innerHTML = '';
 
       orders.slice().reverse().forEach(o => {
         const div = document.createElement('div');
-        div.className = 'p-4 border rounded shadow bg-white';
+        div.className = 'p-4 border rounded shadow bg-white mb-4';
+
+        const status = o['Order Status'] || o.status || 'Pending';
+        const statusLower = status.toLowerCase();
+        const statusColor =
+          statusLower === 'delivered' ? 'text-green-600' :
+          statusLower === 'out for delivery' ? 'text-blue-600' :
+          'text-yellow-600';
+
+        const trackingId = o['Tracking ID'] || o.trackingId || 'N/A';
+        const timestamp = o['Date'] || (o.createdAt ? new Date(o.createdAt).toLocaleString() : '-');
+
         div.innerHTML = `
-          <p class="font-semibold">Order ID: ${o.orderId}</p>
-          <p>Name: ${o.name} | Phone: ${o.phone}</p>
-          <p>Address: ${o.address}</p>
-          <p>Persons: ${o.persons} | Total: ₹${o.total}</p>
-          <p>Status: <span class="${
-            o.status.toLowerCase() === 'delivered' ? 'text-green-600' :
-            o.status.toLowerCase() === 'out for delivery' ? 'text-blue-600' : 'text-yellow-600'
-          } font-bold">${o.status}</span> | Placed on: ${o.timestamp}</p>
-          <p>Items: ${o.items.map(i => `${i.name} x${i.qty}`).join(', ')}</p>
+          <p class="font-semibold">📦 Order ID: ${trackingId}</p>
+          <p><strong>Name:</strong> ${o.name || o['Name'] || '-'} | <strong>Phone:</strong> ${o.phone || o['Ph no'] || '-'}</p>
+          <p><strong>Address:</strong> ${o.address || o['Address'] || '-'}</p>
+          <p><strong>Persons:</strong> ${o.persons || '-'} | <strong>Total:</strong> ₹${o.total || o['Amount'] || 0}</p>
+          <p><strong>Status:</strong> <span class="${statusColor} font-bold">${status}</span> | <strong>Placed on:</strong> ${timestamp}</p>
+          <p><strong>Items:</strong> ${
+            (o.items || [])
+              .map(i => `${i.name} x${i.qty}`)
+              .join(', ')
+          }</p>
         `;
         historyEl.appendChild(div);
       });
@@ -133,12 +145,13 @@ trackBtn.addEventListener('click', async () => {
     if (res.ok) {
       const data = await res.json();
       let colorClass = 'text-yellow-600';
-      if (data.status.toLowerCase() === 'out for delivery') colorClass = 'text-blue-600';
-      if (data.status.toLowerCase() === 'delivered') colorClass = 'text-green-600';
+      const status = data.status || 'Pending';
+      if (status.toLowerCase() === 'out for delivery') colorClass = 'text-blue-600';
+      if (status.toLowerCase() === 'delivered') colorClass = 'text-green-600';
 
       trackResult.innerHTML = `
-        📦 Order ${data.orderId}<br>
-        Status: <span class="${colorClass} font-bold">${data.status}</span><br>
+        📦 Order ${data.orderId || id}<br>
+        Status: <span class="${colorClass} font-bold">${status}</span><br>
         Placed on: ${data.timestamp}
       `;
     } else {

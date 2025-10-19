@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 5200;
 const EXCEL_FILE = 'orders.xlsx';
 const excelFilePath = path.join(__dirname, EXCEL_FILE);
 
-// Middleware
+// ────────────── MIDDLEWARE ──────────────
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -24,61 +24,75 @@ app.use(express.static(path.join(__dirname, 'public')));
 function readOrders() {
     if (!fs.existsSync(excelFilePath)) return [];
     const workbook = XLSX.readFile(excelFilePath);
-    let worksheet = workbook.Sheets['Orders'];
-    if (!worksheet) {
-        worksheet = XLSX.utils.json_to_sheet([]);
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders');
-        XLSX.writeFile(workbook, excelFilePath);
-        return [];
-    }
+    const worksheet = workbook.Sheets['Orders'];
+    if (!worksheet) return [];
     return XLSX.utils.sheet_to_json(worksheet);
 }
 
-function saveOrders(orders) {
+function saveOrders(newOrder) {
+    // Read old orders
+    const existingOrders = readOrders();
+
+    // Add the new order
+    existingOrders.push(newOrder);
+
+    // Create workbook and save all orders
     const workbook = XLSX.utils.book_new();
-    const worksheet = XLSX.utils.json_to_sheet(orders);
+    const worksheet = XLSX.utils.json_to_sheet(existingOrders);
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders');
     XLSX.writeFile(workbook, excelFilePath);
 }
 
 // ────────────── ROUTES ──────────────
-
-// Home
-app.get('/', (req, res) => res.send('Server running. Visit /admin for dashboard.'));
-
-// Add new order → Excel updated immediately
-app.post('/order', (req, res) => {
-    const newOrder = { ...req.body, createdAt: new Date().toISOString() };
-    const existingOrders = readOrders();
-    existingOrders.push(newOrder);
-    saveOrders(existingOrders);
-
-    io.emit('new-order', newOrder); // Real-time update
-    res.json({ success: true, message: 'Order added and saved to Excel.' });
+app.get('/', (req, res) => {
+    res.send('Server running. Visit /admin for dashboard.');
 });
 
-// Admin dashboard HTML
-app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public/admin.html')));
+// Add new order (Append to Excel without deleting old)
+app.post('/order', (req, res) => {
+    const newOrder = { ...req.body, createdAt: new Date().toISOString() };
+    saveOrders(newOrder);
+    io.emit('new-order', newOrder);
+    res.json({ success: true, message: 'Order added successfully without deleting old data.' });
+});
 
-// Get all orders (Excel read every time)
-app.get('/api/orders', (req, res) => res.json(readOrders()));
+// Admin dashboard
+app.get('/admin', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public/admin.html'));
+});
 
-// Mark order as delivered
+// Get all orders
+app.get('/api/orders', (req, res) => {
+    res.json(readOrders());
+});
+
+// Update order status
 app.post('/update-status', (req, res) => {
     const { trackingId, newStatus } = req.body;
     const orders = readOrders();
     const order = orders.find(o => o['Tracking ID'] === trackingId);
+
     if (!order) return res.status(404).json({ error: 'Order not found' });
 
     order['Order Status'] = newStatus;
-    saveOrders(orders);
+
+    // Save updated orders
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(orders);
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders');
+    XLSX.writeFile(workbook, excelFilePath);
+
     io.emit('all-orders', orders);
     res.json({ success: true, message: `Order ${trackingId} marked as ${newStatus}` });
 });
 
-// Clear all orders manually
+// Reset orders manually (only if admin chooses)
 app.post('/reset-orders', (req, res) => {
-    saveOrders([]);
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet([]);
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders');
+    XLSX.writeFile(workbook, excelFilePath);
+
     io.emit('all-orders', []);
     res.json({ success: true, message: 'All orders cleared manually.' });
 });
@@ -95,8 +109,11 @@ app.get('/download-excel', (req, res) => {
 io.on('connection', (socket) => {
     console.log('Admin connected');
     socket.emit('all-orders', readOrders());
-    socket.on('disconnect', () => console.log('Admin disconnected'));
+
+    socket.on('disconnect', () => {
+        console.log('Admin disconnected');
+    });
 });
 
 // ────────────── START SERVER ──────────────
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+server.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
