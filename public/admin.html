@@ -56,7 +56,13 @@
 const socket = io();
 let currentOrders = [];
 
-// Render all orders in table
+// Convert items array to display string
+function formatItems(items) {
+  if (!items) return '-';
+  return Array.isArray(items) ? items.map(i => `${i.name} x${i.qty}`).join(', ') : items;
+}
+
+// Render all orders
 function renderOrders() {
   const tbody = document.getElementById('ordersBody');
   tbody.innerHTML = '';
@@ -65,7 +71,7 @@ function renderOrders() {
     const tr = document.createElement('tr');
     tr.className = 'border-b text-center hover:bg-gray-50';
 
-    const status = o.status || o['Order Status'] || 'Pending';
+    const status = o['Order Status'] || 'Pending';
     const statusLower = status.toLowerCase();
     const statusColor =
       statusLower === 'delivered'
@@ -74,17 +80,10 @@ function renderOrders() {
         ? 'text-blue-600'
         : 'text-yellow-600';
 
-    const dateDisplay = o.timestamp || o.createdAt
-      ? new Date(o.timestamp || o.createdAt).toLocaleString()
-      : '-';
-
-    const itemsList = Array.isArray(o.items) && o.items.length
-      ? o.items.map(i => `${i.name} x${i.qty}`).join(', ')
-      : o.Item || '-';
-
-    const qtyTotal = Array.isArray(o.items) && o.items.length
-      ? o.items.reduce((sum, i) => sum + (i.qty || 0), 0)
-      : o.Quantity || o.Qty || '-';
+    const dateDisplay = o.createdAt ? new Date(o.createdAt).toLocaleString() : '-';
+    const itemsList = formatItems(o.items);
+    const qtyTotal = Array.isArray(o.items) ? o.items.reduce((sum,i)=>sum+(i.qty||0),0) : 0;
+    const totalAmount = Array.isArray(o.items) ? o.items.reduce((sum,i)=>sum+(i.price*i.qty),0) : 0;
 
     let actionBtn = '';
     if (statusLower === 'pending') {
@@ -104,11 +103,11 @@ function renderOrders() {
     tr.innerHTML = `
       <td class="py-2 px-4">${index + 1}</td>
       <td class="py-2 px-4">${dateDisplay}</td>
-      <td class="py-2 px-4">${o.Name || o.name || '-'}</td>
-      <td class="py-2 px-4">${o['Ph no'] || o.Phone || o.phone || '-'}</td>
+      <td class="py-2 px-4">${o.name || '-'}</td>
+      <td class="py-2 px-4">${o.phone || '-'}</td>
       <td class="py-2 px-4">${itemsList}</td>
       <td class="py-2 px-4">${qtyTotal}</td>
-      <td class="py-2 px-4">₹${o.Amount || o.total || 0}</td>
+      <td class="py-2 px-4">₹${totalAmount}</td>
       <td class="py-2 px-4 font-mono">${o['Tracking ID'] || '-'}</td>
       <td class="py-2 px-4 font-bold ${statusColor}">${status}</td>
       <td class="py-2 px-4">${actionBtn}</td>
@@ -133,11 +132,11 @@ async function updateStatus(trackingId, status) {
   }
 }
 
-// Socket.IO listeners
+// Socket.IO live updates
 socket.on('all-orders', orders => { currentOrders = orders; renderOrders(); });
 socket.on('new-order', order => { currentOrders.push(order); renderOrders(); });
 
-// Fallback fetch to ensure all existing orders are loaded
+// Initial fetch to load all orders
 (async function fetchOrders() {
   try {
     const res = await fetch('/api/orders');
