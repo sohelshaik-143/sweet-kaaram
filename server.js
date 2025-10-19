@@ -28,13 +28,18 @@ function readOrders() {
   const orders = XLSX.utils.sheet_to_json(worksheet);
 
   return orders.map(order => {
+    // Parse items from JSON string
     if (order.items && typeof order.items === 'string') {
-      try { order.items = JSON.parse(order.items); } 
-      catch (err) { order.items = []; }
+      try { 
+        order.items = JSON.parse(order.items); 
+      } catch { 
+        order.items = []; 
+      }
     } else if (!order.items) {
       order.items = [];
     }
 
+    // Calculate total amount
     order.totalAmount = order.items.reduce((sum, item) => sum + (item.price * item.qty), 0);
     return order;
   });
@@ -77,7 +82,6 @@ app.post('/order', (req, res) => {
 });
 
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public/admin.html')));
-
 app.get('/api/orders', (req, res) => res.json(readOrders()));
 
 app.post('/update-status', (req, res) => {
