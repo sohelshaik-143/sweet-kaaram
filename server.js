@@ -19,6 +19,12 @@ app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ────────────── HELPERS ──────────────
+function generateTrackingID() {
+  const timestamp = Date.now();
+  const randomNum = Math.floor(1000 + Math.random() * 9000);
+  return `SK${timestamp}${randomNum}`;
+}
+
 function readOrders() {
   if (!fs.existsSync(excelFilePath)) return [];
   const workbook = XLSX.readFile(excelFilePath);
@@ -28,19 +34,16 @@ function readOrders() {
   const orders = XLSX.utils.sheet_to_json(worksheet);
 
   return orders.map(order => {
-    // Parse items from JSON string
     if (order.items && typeof order.items === 'string') {
-      try { 
-        order.items = JSON.parse(order.items); 
-      } catch { 
-        order.items = []; 
-      }
+      try { order.items = JSON.parse(order.items); } catch { order.items = []; }
     } else if (!order.items) {
       order.items = [];
     }
 
-    // Calculate total amount
     order.totalAmount = order.items.reduce((sum, item) => sum + (item.price * item.qty), 0);
+
+    if (!order['Tracking ID']) order['Tracking ID'] = generateTrackingID();
+
     return order;
   });
 }
@@ -69,7 +72,7 @@ app.get('/', (req, res) => res.send('✅ Server running. Visit /admin for dashbo
 app.post('/order', (req, res) => {
   const newOrder = {
     ...req.body,
-    'Tracking ID': `SK${Date.now()}`,
+    'Tracking ID': generateTrackingID(),
     'Order Status': 'Pending',
     createdAt: new Date().toISOString()
   };

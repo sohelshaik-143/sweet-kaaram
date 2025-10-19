@@ -131,17 +131,12 @@ async function updateStatus(trackingId, status) {
     });
     const data = await res.json();
     if (!data.success) alert(data.error || '❌ Failed to update status');
-  } catch (err) {
-    console.error(err);
-    alert('❌ Server error');
-  }
+  } catch (err) { console.error(err); alert('❌ Server error'); }
 }
 
-// Socket.IO live updates
 socket.on('all-orders', orders => { currentOrders = orders; renderOrders(); });
 socket.on('new-order', order => { currentOrders.push(order); renderOrders(); });
 
-// Initial fetch
 (async function fetchOrders() {
   try {
     const res = await fetch('/api/orders');
@@ -151,13 +146,13 @@ socket.on('new-order', order => { currentOrders.push(order); renderOrders(); });
   } catch (err) { console.error(err); }
 })();
 
-// Handle Add Order form
 document.getElementById('addOrderForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const name = document.getElementById('name').value.trim();
   const phone = document.getElementById('phone').value.trim();
   let items = [];
-  try { items = JSON.parse(document.getElementById('items').value); } catch (err) { alert('Invalid items JSON'); return; }
+  try { items = JSON.parse(document.getElementById('items').value); } 
+  catch (err) { alert('Invalid items JSON'); return; }
 
   const orderData = { name, phone, items };
   try {
@@ -170,9 +165,7 @@ document.getElementById('addOrderForm').addEventListener('submit', async (e) => 
     if (response.success) {
       alert(`✅ Order Placed! Tracking ID: ${response.orderId}`);
       document.getElementById('addOrderForm').reset();
-    } else {
-      alert('❌ Failed to place order');
-    }
+    } else { alert('❌ Failed to place order'); }
   } catch (err) { console.error(err); alert('❌ Server error'); }
 });
 </script>
