@@ -14,15 +14,13 @@ const PORT = process.env.PORT || 5200;
 const EXCEL_FILE = 'orders.xlsx';
 const excelFilePath = path.join(__dirname, EXCEL_FILE);
 
-// ────────────── MIDDLEWARE ──────────────
+// Middleware
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ────────────── HELPERS ──────────────
+// Helpers
 function generateTrackingID() {
-  const timestamp = Date.now();
-  const randomNum = Math.floor(1000 + Math.random() * 9000);
-  return `SK${timestamp}${randomNum}`;
+  return `SK${Date.now()}${Math.floor(1000 + Math.random() * 9000)}`;
 }
 
 function readOrders() {
@@ -36,12 +34,9 @@ function readOrders() {
   return orders.map(order => {
     if (order.items && typeof order.items === 'string') {
       try { order.items = JSON.parse(order.items); } catch { order.items = []; }
-    } else if (!order.items) {
-      order.items = [];
-    }
+    } else if (!order.items) order.items = [];
 
     order.totalAmount = order.items.reduce((sum, item) => sum + (item.price * item.qty), 0);
-
     if (!order['Tracking ID']) order['Tracking ID'] = generateTrackingID();
 
     return order;
@@ -53,7 +48,6 @@ function saveOrders(orders) {
     ...order,
     items: order.items ? JSON.stringify(order.items) : '[]'
   }));
-
   const workbook = XLSX.utils.book_new();
   const worksheet = XLSX.utils.json_to_sheet(ordersToSave);
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders');
@@ -66,7 +60,7 @@ function appendOrder(order) {
   saveOrders(orders);
 }
 
-// ────────────── ROUTES ──────────────
+// Routes
 app.get('/', (req, res) => res.send('✅ Server running. Visit /admin for dashboard.'));
 
 app.post('/order', (req, res) => {
@@ -76,11 +70,11 @@ app.post('/order', (req, res) => {
     'Order Status': 'Pending',
     createdAt: new Date().toISOString()
   };
-
   if (!Array.isArray(newOrder.items)) newOrder.items = [];
 
   appendOrder(newOrder);
   io.emit('new-order', newOrder);
+
   res.json({ success: true, orderId: newOrder['Tracking ID'] });
 });
 
@@ -92,7 +86,6 @@ app.post('/update-status', (req, res) => {
   const orders = readOrders();
   const order = orders.find(o => o['Tracking ID'] === trackingId);
   if (!order) return res.status(404).json({ error: 'Order not found' });
-
   order['Order Status'] = newStatus;
   saveOrders(orders);
   io.emit('all-orders', orders);
@@ -104,12 +97,12 @@ app.get('/download-excel', (req, res) => {
   res.download(excelFilePath, 'orders.xlsx');
 });
 
-// ────────────── SOCKET.IO ──────────────
+// Socket.IO
 io.on('connection', (socket) => {
   console.log('Admin connected');
   socket.emit('all-orders', readOrders());
   socket.on('disconnect', () => console.log('Admin disconnected'));
 });
 
-// ────────────── START SERVER ──────────────
+// Start server
 server.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
