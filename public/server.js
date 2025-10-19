@@ -9,6 +9,7 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
+
 const PORT = process.env.PORT || 5200;
 
 // Excel file path
@@ -22,7 +23,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ────────────── HELPER FUNCTIONS ──────────────
 
-// Read all orders from Excel
+// Read orders from Excel
 function readOrders() {
   if (!fs.existsSync(excelFilePath)) return [];
   const workbook = XLSX.readFile(excelFilePath);
@@ -31,7 +32,7 @@ function readOrders() {
   return XLSX.utils.sheet_to_json(worksheet);
 }
 
-// Save orders array to Excel
+// Save orders to Excel
 function saveOrders(orders) {
   const workbook = XLSX.utils.book_new();
   const worksheet = XLSX.utils.json_to_sheet(orders);
@@ -39,10 +40,10 @@ function saveOrders(orders) {
   XLSX.writeFile(workbook, excelFilePath);
 }
 
-// Append a new order without deleting previous
-function appendOrder(newOrder) {
+// Append new order without deleting previous
+function appendOrder(order) {
   const orders = readOrders();
-  orders.push(newOrder);
+  orders.push(order);
   saveOrders(orders);
 }
 
@@ -62,9 +63,8 @@ app.post('/order', (req, res) => {
     createdAt: new Date().toISOString()
   };
   appendOrder(newOrder);
-
-  io.emit('new-order', newOrder); // Real-time broadcast
-  res.json({ success: true, message: 'Order added successfully.', orderId: newOrder['Tracking ID'] });
+  io.emit('new-order', newOrder); // live broadcast
+  res.json({ success: true, orderId: newOrder['Tracking ID'] });
 });
 
 // Admin dashboard
@@ -82,39 +82,26 @@ app.post('/update-status', (req, res) => {
   const { trackingId, newStatus } = req.body;
   const orders = readOrders();
   const order = orders.find(o => o['Tracking ID'] === trackingId);
-
   if (!order) return res.status(404).json({ error: 'Order not found' });
 
   order['Order Status'] = newStatus;
   saveOrders(orders);
 
-  io.emit('all-orders', orders); // Update dashboard live
-  res.json({ success: true, message: `Order ${trackingId} marked as ${newStatus}` });
-});
-
-// Reset all orders manually
-app.post('/reset-orders', (req, res) => {
-  saveOrders([]); // This will clear the Excel file
-  io.emit('all-orders', []); // Notify admin dashboard
-  res.json({ success: true, message: 'All orders cleared manually.' });
+  io.emit('all-orders', orders); // live update
+  res.json({ success: true });
 });
 
 // Download Excel
 app.get('/download-excel', (req, res) => {
   if (!fs.existsSync(excelFilePath)) return res.status(404).send('Excel file not found');
-  res.download(excelFilePath, 'orders.xlsx', err => {
-    if (err) console.error('Error downloading file:', err);
-  });
+  res.download(excelFilePath, 'orders.xlsx');
 });
 
 // ────────────── SOCKET.IO ──────────────
 io.on('connection', (socket) => {
   console.log('Admin connected');
   socket.emit('all-orders', readOrders());
-
-  socket.on('disconnect', () => {
-    console.log('Admin disconnected');
-  });
+  socket.on('disconnect', () => console.log('Admin disconnected'));
 });
 
 // ────────────── START SERVER ──────────────
