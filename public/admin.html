@@ -7,8 +7,8 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="/socket.io/socket.io.js"></script>
 <style>
-  @keyframes highlight { 0% { background-color: #fef3c7; } 100% { background-color: white; } }
-  .new-order { animation: highlight 2s ease; }
+@keyframes highlight { 0% { background-color: #fef3c7; } 100% { background-color: white; } }
+.new-order { animation: highlight 2s ease; }
 </style>
 </head>
 <body class="bg-gray-100 font-sans">
@@ -18,20 +18,19 @@
 </header>
 
 <main class="container mx-auto my-10 px-4">
-
   <div class="flex flex-wrap gap-3 justify-between items-center mb-6">
     <a href="/download-excel"
        class="bg-green-600 text-white px-5 py-3 rounded-lg text-lg font-semibold hover:bg-green-700 transition shadow-lg">
       ⬇ Download Excel
     </a>
-    <button onclick="alert('Clear Orders disabled! Data is preserved permanently until admin manually deletes.')"
+    <button onclick="alert('Clear Orders disabled! Data is preserved.')"
             class="bg-red-600 text-white px-5 py-3 rounded-lg text-lg font-semibold hover:bg-red-700 transition shadow-lg">
       🧹 Clear Orders
     </button>
   </div>
 
   <div id="ordersTable" class="overflow-x-auto bg-white rounded shadow">
-    <table class="min-w-full">
+    <table class="min-w-full table-auto">
       <thead class="bg-red-700 text-white">
         <tr>
           <th class="py-2 px-4">S.No</th>
@@ -55,66 +54,47 @@
     <form id="addOrderForm" class="flex flex-col gap-3">
       <input type="text" id="name" placeholder="Customer Name" class="p-2 border rounded"/>
       <input type="text" id="phone" placeholder="Phone" class="p-2 border rounded"/>
-      <textarea id="items" placeholder='Items JSON: [{"name":"Choco","price":50,"qty":2}]' 
-                class="p-2 border rounded h-24"></textarea>
+      <textarea id="items" placeholder='Items JSON: [{"name":"Choco","price":50,"qty":2}]' class="p-2 border rounded h-24"></textarea>
       <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">Place Order</button>
     </form>
   </div>
-
 </main>
 
 <script>
 const socket = io();
 let currentOrders = [];
 
-function formatItems(items) {
-  if (!items) return '-';
-  return Array.isArray(items) ? items.map(i => `${i.name} x${i.qty}`).join(', ') : items;
-}
-
-function renderOrders() {
+function renderOrders(newOrderId=null) {
   const tbody = document.getElementById('ordersBody');
   tbody.innerHTML = '';
-
-  currentOrders.slice().reverse().forEach((o, index) => {
+  
+  currentOrders.slice().reverse().forEach((o,index)=>{
     const tr = document.createElement('tr');
     tr.className = 'border-b text-center hover:bg-gray-50';
+    if(o['Tracking ID'] === newOrderId) tr.classList.add('new-order');
 
     const status = o['Order Status'] || 'Pending';
     const statusLower = status.toLowerCase();
-    const statusColor =
-      statusLower === 'delivered' ? 'text-green-600' :
-      statusLower === 'out for delivery' ? 'text-blue-600' : 'text-yellow-600';
-
+    const statusColor = statusLower==='delivered'?'text-green-600':statusLower==='out for delivery'?'text-blue-600':'text-yellow-600';
     const dateDisplay = o.createdAt ? new Date(o.createdAt).toLocaleString() : '-';
-    const itemsList = formatItems(o.items);
+    const itemsList = Array.isArray(o.items) ? o.items.map(i=>i.name).join(', ') : '-';
     const qtyTotal = Array.isArray(o.items) ? o.items.reduce((sum,i)=>sum+(i.qty||0),0) : 0;
-    const totalAmount = Array.isArray(o.items) ? o.items.reduce((sum,i)=>sum+(i.price*i.qty),0) : 0;
+    const totalAmount = o.totalAmount ?? (Array.isArray(o.items) ? o.items.reduce((sum,i)=>sum + ((i.price||0)*(i.qty||0)),0) : 0);
 
     let actionBtn = '';
-    if (statusLower === 'pending') {
-      actionBtn = `<button onclick="updateStatus('${o['Tracking ID']}', 'Out for Delivery')"
-                     class="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition">
-                     Out for Delivery
-                   </button>`;
-    } else if (statusLower === 'out for delivery') {
-      actionBtn = `<button onclick="updateStatus('${o['Tracking ID']}', 'Delivered')"
-                     class="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 transition">
-                     Mark Delivered
-                   </button>`;
-    } else {
-      actionBtn = `<span class="text-gray-500">✅ Done</span>`;
-    }
+    if(statusLower==='pending') actionBtn=`<button onclick="updateStatus('${o['Tracking ID']}','Out for Delivery')" class="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition">Out for Delivery</button>`;
+    else if(statusLower==='out for delivery') actionBtn=`<button onclick="updateStatus('${o['Tracking ID']}','Delivered')" class="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 transition">Mark Delivered</button>`;
+    else actionBtn=`<span class="text-gray-500">✅ Done</span>`;
 
     tr.innerHTML = `
-      <td class="py-2 px-4">${index + 1}</td>
+      <td class="py-2 px-4">${index+1}</td>
       <td class="py-2 px-4">${dateDisplay}</td>
-      <td class="py-2 px-4">${o.name || '-'}</td>
-      <td class="py-2 px-4">${o.phone || '-'}</td>
+      <td class="py-2 px-4">${o.name||'-'}</td>
+      <td class="py-2 px-4">${o.phone||'-'}</td>
       <td class="py-2 px-4">${itemsList}</td>
       <td class="py-2 px-4">${qtyTotal}</td>
       <td class="py-2 px-4">₹${totalAmount}</td>
-      <td class="py-2 px-4 font-mono">${o['Tracking ID'] || '-'}</td>
+      <td class="py-2 px-4 font-mono">${o['Tracking ID']||'-'}</td>
       <td class="py-2 px-4 font-bold ${statusColor}">${status}</td>
       <td class="py-2 px-4">${actionBtn}</td>
     `;
@@ -122,51 +102,48 @@ function renderOrders() {
   });
 }
 
-async function updateStatus(trackingId, status) {
-  try {
-    const res = await fetch('/update-status', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ trackingId, newStatus: status })
+async function updateStatus(trackingId,status){
+  try{
+    const res=await fetch('/update-status',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({trackingId,newStatus:status})
     });
     const data = await res.json();
-    if (!data.success) alert(data.error || '❌ Failed to update status');
-  } catch (err) { console.error(err); alert('❌ Server error'); }
+    if(!data.success) alert(data.error || '❌ Failed to update status');
+  } catch(err){ console.error(err); alert('❌ Server error'); }
 }
 
 socket.on('all-orders', orders => { currentOrders = orders; renderOrders(); });
-socket.on('new-order', order => { currentOrders.push(order); renderOrders(); });
+socket.on('new-order', order => { currentOrders.push(order); renderOrders(order['Tracking ID']); });
 
-(async function fetchOrders() {
-  try {
+(async function fetchOrders(){
+  try{
     const res = await fetch('/api/orders');
-    const orders = await res.json();
-    currentOrders = orders;
+    currentOrders = await res.json();
     renderOrders();
-  } catch (err) { console.error(err); }
+  } catch(err){ console.error(err); }
 })();
 
-document.getElementById('addOrderForm').addEventListener('submit', async (e) => {
+document.getElementById('addOrderForm').addEventListener('submit', async e=>{
   e.preventDefault();
   const name = document.getElementById('name').value.trim();
   const phone = document.getElementById('phone').value.trim();
   let items = [];
-  try { items = JSON.parse(document.getElementById('items').value); } 
-  catch (err) { alert('Invalid items JSON'); return; }
+  try { items = JSON.parse(document.getElementById('items').value); } catch { alert('Invalid items JSON'); return; }
 
-  const orderData = { name, phone, items };
-  try {
-    const res = await fetch('/order', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(orderData)
+  try{
+    const res = await fetch('/order',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name,phone,items})
     });
     const response = await res.json();
-    if (response.success) {
+    if(response.success){
       alert(`✅ Order Placed! Tracking ID: ${response.orderId}`);
       document.getElementById('addOrderForm').reset();
-    } else { alert('❌ Failed to place order'); }
-  } catch (err) { console.error(err); alert('❌ Server error'); }
+    } else alert('❌ Failed to place order');
+  } catch(err){ console.error(err); alert('❌ Server error'); }
 });
 </script>
 

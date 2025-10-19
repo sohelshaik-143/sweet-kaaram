@@ -32,14 +32,19 @@ function readOrders() {
   const orders = XLSX.utils.sheet_to_json(worksheet);
 
   return orders.map(order => {
-    // parse items JSON
+    // Parse items JSON
     if (order.items && typeof order.items === 'string') {
       try { order.items = JSON.parse(order.items); } catch { order.items = []; }
     } else if (!order.items) order.items = [];
 
-    // calculate total amount
-    order.totalAmount = order.items.reduce((sum, i) => sum + (i.price * i.qty), 0);
+    // Calculate total amount only if missing
+    if (!order.totalAmount) {
+      order.totalAmount = order.items.reduce((sum, i) => sum + ((i.price||0) * (i.qty||0)), 0);
+    }
+
     if (!order['Tracking ID']) order['Tracking ID'] = generateTrackingID();
+    if (!order['Order Status']) order['Order Status'] = 'Pending';
+
     return order;
   });
 }
@@ -49,6 +54,7 @@ function saveOrders(orders) {
     ...order,
     items: order.items ? JSON.stringify(order.items) : '[]'
   }));
+
   const workbook = XLSX.utils.book_new();
   const worksheet = XLSX.utils.json_to_sheet(ordersToSave);
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders');
@@ -72,6 +78,7 @@ app.post('/order', (req, res) => {
     createdAt: new Date().toISOString()
   };
   if (!Array.isArray(newOrder.items)) newOrder.items = [];
+  newOrder.totalAmount = newOrder.items.reduce((sum, i) => sum + ((i.price||0)*(i.qty||0)), 0);
 
   appendOrder(newOrder);
   io.emit('new-order', newOrder);
@@ -87,9 +94,11 @@ app.post('/update-status', (req, res) => {
   const orders = readOrders();
   const order = orders.find(o => o['Tracking ID'] === trackingId);
   if (!order) return res.status(404).json({ error: 'Order not found' });
+
   order['Order Status'] = newStatus;
   saveOrders(orders);
   io.emit('all-orders', orders);
+
   res.json({ success: true });
 });
 
