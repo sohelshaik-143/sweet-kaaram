@@ -19,8 +19,6 @@ app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ────────────── HELPERS ──────────────
-
-// Read orders from Excel
 function readOrders() {
   if (!fs.existsSync(excelFilePath)) return [];
   const workbook = XLSX.readFile(excelFilePath);
@@ -29,27 +27,20 @@ function readOrders() {
 
   const orders = XLSX.utils.sheet_to_json(worksheet);
 
-  // Parse items back to array and calculate total amount
   return orders.map(order => {
     if (order.items && typeof order.items === 'string') {
-      try {
-        order.items = JSON.parse(order.items);
-      } catch (err) {
-        order.items = [];
-      }
+      try { order.items = JSON.parse(order.items); } 
+      catch (err) { order.items = []; }
     } else if (!order.items) {
       order.items = [];
     }
 
-    // Calculate total amount
     order.totalAmount = order.items.reduce((sum, item) => sum + (item.price * item.qty), 0);
     return order;
   });
 }
 
-// Save orders to Excel
 function saveOrders(orders) {
-  // Convert items array to string before saving
   const ordersToSave = orders.map(order => ({
     ...order,
     items: order.items ? JSON.stringify(order.items) : '[]'
@@ -61,7 +52,6 @@ function saveOrders(orders) {
   XLSX.writeFile(workbook, excelFilePath);
 }
 
-// Append new order without deleting previous
 function appendOrder(order) {
   const orders = readOrders();
   orders.push(order);
@@ -69,13 +59,8 @@ function appendOrder(order) {
 }
 
 // ────────────── ROUTES ──────────────
+app.get('/', (req, res) => res.send('✅ Server running. Visit /admin for dashboard.'));
 
-// Home
-app.get('/', (req, res) => {
-  res.send('✅ Server running. Visit /admin for dashboard.');
-});
-
-// Add new order
 app.post('/order', (req, res) => {
   const newOrder = {
     ...req.body,
@@ -84,25 +69,17 @@ app.post('/order', (req, res) => {
     createdAt: new Date().toISOString()
   };
 
-  // Ensure items array exists
   if (!Array.isArray(newOrder.items)) newOrder.items = [];
 
   appendOrder(newOrder);
-  io.emit('new-order', newOrder); // live broadcast
+  io.emit('new-order', newOrder);
   res.json({ success: true, orderId: newOrder['Tracking ID'] });
 });
 
-// Admin dashboard
-app.get('/admin', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public/admin.html'));
-});
+app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public/admin.html')));
 
-// Get all orders
-app.get('/api/orders', (req, res) => {
-  res.json(readOrders());
-});
+app.get('/api/orders', (req, res) => res.json(readOrders()));
 
-// Update order status
 app.post('/update-status', (req, res) => {
   const { trackingId, newStatus } = req.body;
   const orders = readOrders();
@@ -111,12 +88,10 @@ app.post('/update-status', (req, res) => {
 
   order['Order Status'] = newStatus;
   saveOrders(orders);
-
-  io.emit('all-orders', orders); // live update
+  io.emit('all-orders', orders);
   res.json({ success: true });
 });
 
-// Download Excel
 app.get('/download-excel', (req, res) => {
   if (!fs.existsSync(excelFilePath)) return res.status(404).send('Excel file not found');
   res.download(excelFilePath, 'orders.xlsx');

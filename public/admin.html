@@ -50,19 +50,28 @@
     </table>
   </div>
 
+  <div class="my-8 p-4 bg-white rounded shadow">
+    <h2 class="text-xl font-bold mb-4">➕ Add New Order</h2>
+    <form id="addOrderForm" class="flex flex-col gap-3">
+      <input type="text" id="name" placeholder="Customer Name" class="p-2 border rounded"/>
+      <input type="text" id="phone" placeholder="Phone" class="p-2 border rounded"/>
+      <textarea id="items" placeholder='Items JSON: [{"name":"Choco","price":50,"qty":2}]' 
+                class="p-2 border rounded h-24"></textarea>
+      <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">Place Order</button>
+    </form>
+  </div>
+
 </main>
 
 <script>
 const socket = io();
 let currentOrders = [];
 
-// Convert items array to display string
 function formatItems(items) {
   if (!items) return '-';
   return Array.isArray(items) ? items.map(i => `${i.name} x${i.qty}`).join(', ') : items;
 }
 
-// Render all orders
 function renderOrders() {
   const tbody = document.getElementById('ordersBody');
   tbody.innerHTML = '';
@@ -74,11 +83,8 @@ function renderOrders() {
     const status = o['Order Status'] || 'Pending';
     const statusLower = status.toLowerCase();
     const statusColor =
-      statusLower === 'delivered'
-        ? 'text-green-600'
-        : statusLower === 'out for delivery'
-        ? 'text-blue-600'
-        : 'text-yellow-600';
+      statusLower === 'delivered' ? 'text-green-600' :
+      statusLower === 'out for delivery' ? 'text-blue-600' : 'text-yellow-600';
 
     const dateDisplay = o.createdAt ? new Date(o.createdAt).toLocaleString() : '-';
     const itemsList = formatItems(o.items);
@@ -116,7 +122,6 @@ function renderOrders() {
   });
 }
 
-// Update order status
 async function updateStatus(trackingId, status) {
   try {
     const res = await fetch('/update-status', {
@@ -136,17 +141,40 @@ async function updateStatus(trackingId, status) {
 socket.on('all-orders', orders => { currentOrders = orders; renderOrders(); });
 socket.on('new-order', order => { currentOrders.push(order); renderOrders(); });
 
-// Initial fetch to load all orders
+// Initial fetch
 (async function fetchOrders() {
   try {
     const res = await fetch('/api/orders');
     const orders = await res.json();
     currentOrders = orders;
     renderOrders();
-  } catch (err) {
-    console.error(err);
-  }
+  } catch (err) { console.error(err); }
 })();
+
+// Handle Add Order form
+document.getElementById('addOrderForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = document.getElementById('name').value.trim();
+  const phone = document.getElementById('phone').value.trim();
+  let items = [];
+  try { items = JSON.parse(document.getElementById('items').value); } catch (err) { alert('Invalid items JSON'); return; }
+
+  const orderData = { name, phone, items };
+  try {
+    const res = await fetch('/order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(orderData)
+    });
+    const response = await res.json();
+    if (response.success) {
+      alert(`✅ Order Placed! Tracking ID: ${response.orderId}`);
+      document.getElementById('addOrderForm').reset();
+    } else {
+      alert('❌ Failed to place order');
+    }
+  } catch (err) { console.error(err); alert('❌ Server error'); }
+});
 </script>
 
 </body>
