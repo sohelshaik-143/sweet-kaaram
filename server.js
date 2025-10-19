@@ -32,13 +32,14 @@ function readOrders() {
   const orders = XLSX.utils.sheet_to_json(worksheet);
 
   return orders.map(order => {
+    // parse items JSON
     if (order.items && typeof order.items === 'string') {
       try { order.items = JSON.parse(order.items); } catch { order.items = []; }
     } else if (!order.items) order.items = [];
 
-    order.totalAmount = order.items.reduce((sum, item) => sum + (item.price * item.qty), 0);
+    // calculate total amount
+    order.totalAmount = order.items.reduce((sum, i) => sum + (i.price * i.qty), 0);
     if (!order['Tracking ID']) order['Tracking ID'] = generateTrackingID();
-
     return order;
   });
 }
