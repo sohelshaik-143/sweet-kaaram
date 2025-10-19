@@ -9,178 +9,137 @@
 </head>
 <body class="bg-gray-100 font-sans">
 
-  <!-- Header -->
-  <header class="bg-red-700 text-white p-6 text-center shadow">
-    <h1 class="text-4xl font-bold">🍬 Sweet & Karam - Admin Dashboard</h1>
-  </header>
+<header class="bg-red-700 text-white p-6 text-center shadow">
+  <h1 class="text-4xl font-bold">🍬 Sweet & Karam - Admin Dashboard</h1>
+</header>
 
-  <main class="container mx-auto my-10 px-4">
+<main class="container mx-auto my-10 px-4">
 
-    <!-- Top Buttons -->
-    <div class="flex flex-wrap gap-3 justify-end items-center mb-6">
-      <a href="/download-excel"
-         class="bg-green-600 text-white px-5 py-3 rounded-lg text-lg font-semibold hover:bg-green-700 transition shadow-lg">
-        ⬇ Download Excel
-      </a>
+  <div class="flex flex-wrap gap-3 justify-end items-center mb-6">
+    <a href="/download-excel"
+       class="bg-green-600 text-white px-5 py-3 rounded-lg text-lg font-semibold hover:bg-green-700 transition shadow-lg">
+      ⬇ Download Excel
+    </a>
+    <button onclick="alert('Clear Orders disabled to preserve all orders!')"
+            class="bg-red-600 text-white px-5 py-3 rounded-lg text-lg font-semibold hover:bg-red-700 transition shadow-lg">
+      🧹 Clear Orders
+    </button>
+  </div>
 
-      <button onclick="resetOrders()"
-              class="bg-red-600 text-white px-5 py-3 rounded-lg text-lg font-semibold hover:bg-red-700 transition shadow-lg">
-        🧹 Clear Orders
-      </button>
-    </div>
+  <div id="ordersTable" class="overflow-x-auto bg-white rounded shadow">
+    <table class="min-w-full">
+      <thead class="bg-red-700 text-white">
+        <tr>
+          <th class="py-2 px-4">S.No</th>
+          <th class="py-2 px-4">Date</th>
+          <th class="py-2 px-4">Name</th>
+          <th class="py-2 px-4">Phone</th>
+          <th class="py-2 px-4">Item(s)</th>
+          <th class="py-2 px-4">Qty</th>
+          <th class="py-2 px-4">Amount</th>
+          <th class="py-2 px-4">Tracking ID</th>
+          <th class="py-2 px-4">Status</th>
+          <th class="py-2 px-4">Action</th>
+        </tr>
+      </thead>
+      <tbody id="ordersBody"></tbody>
+    </table>
+  </div>
 
-    <!-- Orders Table -->
-    <div id="ordersTable" class="overflow-x-auto bg-white rounded shadow">
-      <table class="min-w-full">
-        <thead class="bg-red-700 text-white">
-          <tr>
-            <th class="py-2 px-4">S.No</th>
-            <th class="py-2 px-4">Date</th>
-            <th class="py-2 px-4">Name</th>
-            <th class="py-2 px-4">Phone</th>
-            <th class="py-2 px-4">Item(s)</th>
-            <th class="py-2 px-4">Qty</th>
-            <th class="py-2 px-4">Amount</th>
-            <th class="py-2 px-4">Tracking ID</th>
-            <th class="py-2 px-4">Status</th>
-            <th class="py-2 px-4">Action</th>
-          </tr>
-        </thead>
-        <tbody id="ordersBody"></tbody>
-      </table>
-    </div>
+</main>
 
-  </main>
+<script>
+const socket = io();
+let currentOrders = [];
 
-  <script>
-    const socket = io();
-    let currentOrders = [];
+function renderOrders() {
+  const tbody = document.getElementById('ordersBody');
+  tbody.innerHTML = '';
 
-    // Render orders
-    function renderOrders() {
-      const tbody = document.getElementById('ordersBody');
-      tbody.innerHTML = '';
+  currentOrders.slice().reverse().forEach((o, index) => {
+    const tr = document.createElement('tr');
+    tr.className = 'border-b text-center hover:bg-gray-50';
 
-      currentOrders.slice().reverse().forEach((o, index) => {
-        const tr = document.createElement('tr');
-        tr.className = 'border-b text-center hover:bg-gray-50';
+    const status = o.status || o['Order Status'] || 'Pending';
+    const statusLower = status.toLowerCase();
+    const statusColor =
+      statusLower === 'delivered'
+        ? 'text-green-600'
+        : statusLower === 'out for delivery'
+        ? 'text-blue-600'
+        : 'text-yellow-600';
 
-        const status = o.status || o['Order Status'] || 'Pending';
-        const statusLower = status.toLowerCase();
-        const statusColor =
-          statusLower === 'delivered'
-            ? 'text-green-600'
-            : statusLower === 'out for delivery'
-            ? 'text-blue-600'
-            : 'text-yellow-600';
+    const dateDisplay = o.timestamp || o.createdAt
+      ? new Date(o.timestamp || o.createdAt).toLocaleString()
+      : '-';
 
-        const dateDisplay = o.timestamp || o.createdAt
-          ? new Date(o.timestamp || o.createdAt).toLocaleString()
-          : '-';
+    const itemsList = Array.isArray(o.items) && o.items.length
+      ? o.items.map(i => `${i.name} x${i.qty}`).join(', ')
+      : o.Item || '-';
+    const qtyTotal = Array.isArray(o.items) && o.items.length
+      ? o.items.reduce((sum, i) => sum + (i.qty || 0), 0)
+      : o.Quantity || o.Qty || '-';
 
-        const itemsList = Array.isArray(o.items) && o.items.length
-          ? o.items.map(i => `${i.name} x${i.qty}`).join(', ')
-          : o.Item || '-';
-        const qtyTotal = Array.isArray(o.items) && o.items.length
-          ? o.items.reduce((sum, i) => sum + (i.qty || 0), 0)
-          : o.Quantity || o.Qty || '-';
-
-        let actionBtn = '';
-        if (statusLower === 'pending') {
-          actionBtn = `<button onclick="markOutForDelivery('${o['Tracking ID']}')"
-                          class="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition">
-                          Out for Delivery
-                       </button>`;
-        } else if (statusLower === 'out for delivery') {
-          actionBtn = `<button onclick="markDelivered('${o['Tracking ID']}')"
-                          class="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 transition">
-                          Mark Delivered
-                       </button>`;
-        } else {
-          actionBtn = `<span class="text-gray-500">✅ Done</span>`;
-        }
-
-        tr.innerHTML = `
-          <td class="py-2 px-4">${index + 1}</td>
-          <td class="py-2 px-4">${dateDisplay}</td>
-          <td class="py-2 px-4">${o.Name || o.name || '-'}</td>
-          <td class="py-2 px-4">${o['Ph no'] || o.Phone || o.phone || '-'}</td>
-          <td class="py-2 px-4">${itemsList}</td>
-          <td class="py-2 px-4">${qtyTotal}</td>
-          <td class="py-2 px-4">₹${o.Amount || o.total || 0}</td>
-          <td class="py-2 px-4 font-mono">${o['Tracking ID'] || '-'}</td>
-          <td class="py-2 px-4 font-bold ${statusColor}" id="status-${o['Tracking ID']}">${status}</td>
-          <td class="py-2 px-4">${actionBtn}</td>
-        `;
-        tbody.appendChild(tr);
-      });
+    let actionBtn = '';
+    if (statusLower === 'pending') {
+      actionBtn = `<button onclick="updateStatus('${o['Tracking ID']}', 'Out for Delivery')"
+                     class="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition">
+                     Out for Delivery
+                   </button>`;
+    } else if (statusLower === 'out for delivery') {
+      actionBtn = `<button onclick="updateStatus('${o['Tracking ID']}', 'Delivered')"
+                     class="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 transition">
+                     Mark Delivered
+                   </button>`;
+    } else {
+      actionBtn = `<span class="text-gray-500">✅ Done</span>`;
     }
 
-    // Update status helper
-    async function updateStatus(trackingId, status) {
-      try {
-        const res = await fetch('/update-status', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ trackingId, newStatus: status })
-        });
-        const data = await res.json();
-        if (!res.ok) alert('❌ ' + data.error);
-      } catch (err) {
-        console.error(err);
-        alert('❌ Server error');
-      }
-    }
+    tr.innerHTML = `
+      <td class="py-2 px-4">${index + 1}</td>
+      <td class="py-2 px-4">${dateDisplay}</td>
+      <td class="py-2 px-4">${o.Name || o.name || '-'}</td>
+      <td class="py-2 px-4">${o['Ph no'] || o.Phone || o.phone || '-'}</td>
+      <td class="py-2 px-4">${itemsList}</td>
+      <td class="py-2 px-4">${qtyTotal}</td>
+      <td class="py-2 px-4">₹${o.Amount || o.total || 0}</td>
+      <td class="py-2 px-4 font-mono">${o['Tracking ID'] || '-'}</td>
+      <td class="py-2 px-4 font-bold ${statusColor}">${status}</td>
+      <td class="py-2 px-4">${actionBtn}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
 
-    // Status actions
-    async function markOutForDelivery(trackingId) {
-      if (!confirm(`Mark order ${trackingId} as Out for Delivery?`)) return;
-      await updateStatus(trackingId, 'Out for Delivery');
-    }
-
-    async function markDelivered(trackingId) {
-      if (!confirm(`Mark order ${trackingId} as Delivered?`)) return;
-      await updateStatus(trackingId, 'Delivered');
-    }
-
-    // Clear orders (does not remove orders from dashboard live)
-    async function resetOrders() {
-      if (!confirm('⚠ Are you sure you want to clear all orders?')) return;
-      try {
-        const res = await fetch('/reset-orders', { method: 'POST' });
-        const data = await res.json();
-        if (!res.ok) alert('❌ ' + data.error);
-      } catch (err) {
-        console.error(err);
-        alert('❌ Server error');
-      }
-    }
-
-    // Socket listeners
-    socket.on('all-orders', (orders) => {
-      currentOrders = orders; // keep all previous orders
-      renderOrders();
+async function updateStatus(trackingId, status) {
+  try {
+    await fetch('/update-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trackingId, newStatus: status })
     });
+  } catch (err) {
+    console.error(err);
+    alert('❌ Server error');
+  }
+}
 
-    socket.on('new-order', (order) => {
-      currentOrders.push(order);
-      renderOrders();
-    });
+// Socket.IO listeners
+socket.on('all-orders', orders => { currentOrders = orders; renderOrders(); });
+socket.on('new-order', order => { currentOrders.push(order); renderOrders(); });
 
-    // Initial fetch fallback
-    async function fetchOrders() {
-      try {
-        const res = await fetch('/api/orders');
-        const orders = await res.json();
-        currentOrders = orders;
-        renderOrders();
-      } catch (err) {
-        console.error('Error fetching orders:', err);
-      }
-    }
-
-    fetchOrders();
-  </script>
+// Fallback fetch
+(async function fetchOrders() {
+  try {
+    const res = await fetch('/api/orders');
+    const orders = await res.json();
+    currentOrders = orders;
+    renderOrders();
+  } catch (err) {
+    console.error(err);
+  }
+})();
+</script>
 
 </body>
 </html>
