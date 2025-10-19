@@ -1,7 +1,7 @@
 const express = require('express');
 const path = require('path');
 const bodyParser = require('body-parser');
-const XLSX = require('xlsx');
+const ExcelJS = require('exceljs');
 const fs = require('fs');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -11,128 +11,151 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 const PORT = process.env.PORT || 5200;
-
-// Excel file path
 const EXCEL_FILE = 'orders.xlsx';
 const excelFilePath = path.join(__dirname, EXCEL_FILE);
 
-// ────────────── MIDDLEWARE ──────────────
+// ────────────── Middleware ──────────────
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ────────────── HELPER FUNCTIONS ──────────────
+// ────────────── Helper Functions ──────────────
 
-// Ensure Excel file exists with proper headers
-function initExcel() {
+// Initialize Excel if missing
+async function initExcel() {
   if (!fs.existsSync(excelFilePath)) {
-    const workbook = XLSX.utils.book_new();
-    const worksheet = XLSX.utils.json_to_sheet([]);
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders');
-    XLSX.writeFile(workbook, excelFilePath);
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Orders');
+    sheet.columns = [
+      { header: 'S.No', key: 'sno', width: 5 },
+      { header: 'Date', key: 'date', width: 20 },
+      { header: 'Name', key: 'name', width: 20 },
+      { header: 'Ph no', key: 'phone', width: 15 },
+      { header: 'Item', key: 'item', width: 30 },
+      { header: 'Qty', key: 'qty', width: 5 },
+      { header: 'Amount', key: 'amount', width: 10 },
+      { header: 'Tracking ID', key: 'trackingId', width: 20 },
+      { header: 'Order Status', key: 'status', width: 15 }
+    ];
+    await workbook.xlsx.writeFile(excelFilePath);
   }
 }
 
-// Read orders from Excel
-function readOrders() {
-  initExcel();
-  const workbook = XLSX.readFile(excelFilePath);
-  const worksheet = workbook.Sheets['Orders'];
-  if (!worksheet) return [];
-  const orders = XLSX.utils.sheet_to_json(worksheet);
+// Convert items array to string for Excel
+function itemsToString(items) {
+  if (!items) return '';
+  return Array.isArray(items)
+    ? items.map(i => `${i.name} x${i.qty}`).join(', ')
+    : items;
+}
 
-  // Normalize property names for dashboard
-  return orders.map(o => ({
-    name: o.name || o.Name || '',
-    phone: o.phone || o.Phone || '',
-    email: o.email || o.Email || '',
-    address: o.address || o.Address || '',
-    persons: o.persons || o.Persons || 0,
-    items: o.items ? JSON.parse(o.items) : [],
-    total: o.total || o.Total || 0,
-    'Tracking ID': o['Tracking ID'] || o.TrackingID || '',
-    'Order Status': o['Order Status'] || o.status || 'Pending',
-    createdAt: o.createdAt || o.CreatedAt || new Date().toISOString()
-  }));
+// Read orders from Excel
+async function readOrders() {
+  await initExcel();
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.readFile(excelFilePath);
+  const sheet = workbook.getWorksheet('Orders');
+  const rows = [];
+  sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+    if (rowNumber === 1) return; // skip header
+    rows.push({
+      name: row.getCell('C').value || '',
+      phone: row.getCell('D').value || '',
+      items: row.getCell('E').value ? row.getCell('E').value.split(',').map(i => {
+        const [name, qty] = i.trim().split(' x');
+        return { name, qty: Number(qty) };
+      }) : [],
+      total: row.getCell('G').value || 0,
+      'Tracking ID': row.getCell('H').value || '',
+      'Order Status': row.getCell('I').value || 'Pending',
+      createdAt: row.getCell('B').value ? new Date(row.getCell('B').value).toISOString() : new Date().toISOString()
+    });
+  });
+  return rows;
 }
 
 // Save orders to Excel
-function saveOrders(orders) {
-  const workbook = XLSX.utils.book_new();
-  const worksheet = XLSX.utils.json_to_sheet(
-    orders.map(o => ({
-      ...o,
-      items: JSON.stringify(o.items)
-    }))
-  );
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders');
-  XLSX.writeFile(workbook, excelFilePath);
+async function saveOrders(orders) {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Orders');
+  sheet.columns = [
+    { header: 'S.No', key: 'sno', width: 5 },
+    { header: 'Date', key: 'date', width: 20 },
+    { header: 'Name', key: 'name', width: 20 },
+    { header: 'Ph no', key: 'phone', width: 15 },
+    { header: 'Item', key: 'item', width: 30 },
+    { header: 'Qty', key: 'qty', width: 5 },
+    { header: 'Amount', key: 'amount', width: 10 },
+    { header: 'Tracking ID', key: 'trackingId', width: 20 },
+    { header: 'Order Status', key: 'status', width: 15 }
+  ];
+
+  orders.forEach((o, index) => {
+    sheet.addRow({
+      sno: index + 1,
+      date: new Date(o.createdAt).toLocaleString(),
+      name: o.name,
+      phone: o.phone,
+      item: itemsToString(o.items),
+      qty: Array.isArray(o.items) ? o.items.reduce((sum,i)=>sum+(i.qty||0),0) : 0,
+      amount: o.total,
+      trackingId: o['Tracking ID'],
+      status: o['Order Status']
+    });
+  });
+
+  await workbook.xlsx.writeFile(excelFilePath);
 }
 
-// Append new order without deleting previous
-function appendOrder(order) {
-  const orders = readOrders();
+// Append new order
+async function appendOrder(order) {
+  const orders = await readOrders();
   orders.push(order);
-  saveOrders(orders);
+  await saveOrders(orders);
 }
 
-// ────────────── ROUTES ──────────────
+// ────────────── Routes ──────────────
+app.get('/', (req, res) => res.send('✅ Server running. Visit /admin for dashboard.'));
 
-// Home
-app.get('/', (req, res) => {
-  res.send('✅ Server running. Visit /admin for dashboard.');
-});
-
-// Add new order
-app.post('/order', (req, res) => {
+app.post('/order', async (req, res) => {
   const newOrder = {
     ...req.body,
     'Tracking ID': `SK${Date.now()}`,
     'Order Status': 'Pending',
     createdAt: new Date().toISOString()
   };
-  appendOrder(newOrder);
-  io.emit('new-order', newOrder); // live broadcast
+  await appendOrder(newOrder);
+  io.emit('new-order', newOrder);
   res.json({ success: true, orderId: newOrder['Tracking ID'] });
 });
 
-// Admin dashboard
-app.get('/admin', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public/admin.html'));
-});
+app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public/admin.html')));
 
-// Get all orders
-app.get('/api/orders', (req, res) => {
-  res.json(readOrders());
-});
+app.get('/api/orders', async (req, res) => res.json(await readOrders()));
 
-// Update order status
-app.post('/update-status', (req, res) => {
+app.post('/update-status', async (req, res) => {
   const { trackingId, newStatus } = req.body;
-  const orders = readOrders();
+  const orders = await readOrders();
   const order = orders.find(o => o['Tracking ID'] === trackingId);
-
   if (!order) return res.status(404).json({ error: 'Order not found' });
 
   order['Order Status'] = newStatus;
-  saveOrders(orders);
-
-  io.emit('all-orders', orders); // live update
+  await saveOrders(orders);
+  io.emit('all-orders', orders);
   res.json({ success: true });
 });
 
-// Download Excel
 app.get('/download-excel', (req, res) => {
   if (!fs.existsSync(excelFilePath)) return res.status(404).send('Excel file not found');
   res.download(excelFilePath, 'orders.xlsx');
 });
 
-// ────────────── SOCKET.IO ──────────────
+// ────────────── Socket.IO ──────────────
 io.on('connection', (socket) => {
   console.log('Admin connected');
-  socket.emit('all-orders', readOrders());
+  readOrders().then(orders => socket.emit('all-orders', orders));
   socket.on('disconnect', () => console.log('Admin disconnected'));
 });
 
-// ────────────── START SERVER ──────────────
+// ────────────── Start Server ──────────────
 server.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));

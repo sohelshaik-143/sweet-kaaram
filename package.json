@@ -8,10 +8,20 @@
   },
   "dependencies": {
     "body-parser": "^1.20.3",
+    "exceljs": "^4.4.0",
     "express": "^4.21.2",
+    "socket.io": "^4.8.1",
     "xlsx": "^0.18.5"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sohelshaik-143/sweet-kaaram.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sohelshaik-143/sweet-kaaram/issues"
+  },
+  "homepage": "https://github.com/sohelshaik-143/sweet-kaaram#readme"
 }
