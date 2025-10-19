@@ -20,7 +20,7 @@
        class="bg-green-600 text-white px-5 py-3 rounded-lg text-lg font-semibold hover:bg-green-700 transition shadow-lg">
       ⬇ Download Excel
     </a>
-    <button onclick="alert('Clear Orders disabled to preserve all orders!')"
+    <button onclick="alert('Clear Orders disabled! Data is preserved permanently until admin manually deletes.')"
             class="bg-red-600 text-white px-5 py-3 rounded-lg text-lg font-semibold hover:bg-red-700 transition shadow-lg">
       🧹 Clear Orders
     </button>
@@ -52,6 +52,7 @@
 const socket = io();
 let currentOrders = [];
 
+// Render all orders in the table
 function renderOrders() {
   const tbody = document.getElementById('ordersBody');
   tbody.innerHTML = '';
@@ -76,6 +77,7 @@ function renderOrders() {
     const itemsList = Array.isArray(o.items) && o.items.length
       ? o.items.map(i => `${i.name} x${i.qty}`).join(', ')
       : o.Item || '-';
+
     const qtyTotal = Array.isArray(o.items) && o.items.length
       ? o.items.reduce((sum, i) => sum + (i.qty || 0), 0)
       : o.Quantity || o.Qty || '-';
@@ -111,13 +113,16 @@ function renderOrders() {
   });
 }
 
+// Update order status
 async function updateStatus(trackingId, status) {
   try {
-    await fetch('/update-status', {
+    const res = await fetch('/update-status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ trackingId, newStatus: status })
     });
+    const data = await res.json();
+    if (!data.success) alert(data.error || '❌ Failed to update status');
   } catch (err) {
     console.error(err);
     alert('❌ Server error');
@@ -128,7 +133,7 @@ async function updateStatus(trackingId, status) {
 socket.on('all-orders', orders => { currentOrders = orders; renderOrders(); });
 socket.on('new-order', order => { currentOrders.push(order); renderOrders(); });
 
-// Fallback fetch
+// Fallback fetch to ensure existing orders are loaded
 (async function fetchOrders() {
   try {
     const res = await fetch('/api/orders');
