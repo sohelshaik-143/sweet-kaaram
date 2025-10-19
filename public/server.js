@@ -23,19 +23,48 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ────────────── HELPER FUNCTIONS ──────────────
 
+// Ensure Excel file exists with proper headers
+function initExcel() {
+  if (!fs.existsSync(excelFilePath)) {
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet([]);
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders');
+    XLSX.writeFile(workbook, excelFilePath);
+  }
+}
+
 // Read orders from Excel
 function readOrders() {
-  if (!fs.existsSync(excelFilePath)) return [];
+  initExcel();
   const workbook = XLSX.readFile(excelFilePath);
   const worksheet = workbook.Sheets['Orders'];
   if (!worksheet) return [];
-  return XLSX.utils.sheet_to_json(worksheet);
+  const orders = XLSX.utils.sheet_to_json(worksheet);
+
+  // Normalize property names for dashboard
+  return orders.map(o => ({
+    name: o.name || o.Name || '',
+    phone: o.phone || o.Phone || '',
+    email: o.email || o.Email || '',
+    address: o.address || o.Address || '',
+    persons: o.persons || o.Persons || 0,
+    items: o.items ? JSON.parse(o.items) : [],
+    total: o.total || o.Total || 0,
+    'Tracking ID': o['Tracking ID'] || o.TrackingID || '',
+    'Order Status': o['Order Status'] || o.status || 'Pending',
+    createdAt: o.createdAt || o.CreatedAt || new Date().toISOString()
+  }));
 }
 
 // Save orders to Excel
 function saveOrders(orders) {
   const workbook = XLSX.utils.book_new();
-  const worksheet = XLSX.utils.json_to_sheet(orders);
+  const worksheet = XLSX.utils.json_to_sheet(
+    orders.map(o => ({
+      ...o,
+      items: JSON.stringify(o.items)
+    }))
+  );
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders');
   XLSX.writeFile(workbook, excelFilePath);
 }
@@ -82,6 +111,7 @@ app.post('/update-status', (req, res) => {
   const { trackingId, newStatus } = req.body;
   const orders = readOrders();
   const order = orders.find(o => o['Tracking ID'] === trackingId);
+
   if (!order) return res.status(404).json({ error: 'Order not found' });
 
   order['Order Status'] = newStatus;
