@@ -9,38 +9,33 @@
 </head>
 <body class="bg-gray-100 font-sans">
 
-  <!-- Header -->
   <header class="bg-red-700 text-white p-6 text-center shadow">
     <h1 class="text-4xl font-bold">🍬 Sweet & Karam - Admin Dashboard</h1>
   </header>
 
   <main class="container mx-auto my-10 px-4">
 
-    <!-- Top Buttons -->
     <div class="flex flex-wrap gap-3 justify-end items-center mb-6">
-      <!-- Download Excel -->
       <a href="/download-excel"
          class="bg-green-600 text-white px-5 py-3 rounded-lg text-lg font-semibold hover:bg-green-700 transition shadow-lg">
         ⬇ Download Excel
       </a>
 
-      <!-- Clear Orders -->
       <button onclick="resetOrders()"
               class="bg-red-600 text-white px-5 py-3 rounded-lg text-lg font-semibold hover:bg-red-700 transition shadow-lg">
-        🧽 Clear Orders
+        🧹 Clear Orders
       </button>
     </div>
 
-    <!-- Orders Table -->
-    <div id="ordersTable" class="overflow-x-auto">
-      <table class="min-w-full bg-white rounded shadow">
+    <div id="ordersTable" class="overflow-x-auto bg-white rounded shadow">
+      <table class="min-w-full">
         <thead class="bg-red-700 text-white">
           <tr>
             <th class="py-2 px-4">S.No</th>
             <th class="py-2 px-4">Date</th>
             <th class="py-2 px-4">Name</th>
             <th class="py-2 px-4">Phone</th>
-            <th class="py-2 px-4">Item</th>
+            <th class="py-2 px-4">Item(s)</th>
             <th class="py-2 px-4">Qty</th>
             <th class="py-2 px-4">Amount</th>
             <th class="py-2 px-4">Tracking ID</th>
@@ -58,19 +53,16 @@
     const socket = io();
     let currentOrders = [];
 
-    // 🧾 Render Orders
     function renderOrders(orders) {
       const tbody = document.getElementById('ordersBody');
       tbody.innerHTML = '';
 
-      // Show newest orders first
       orders.slice().reverse().forEach((o, index) => {
         const tr = document.createElement('tr');
         tr.className = 'border-b text-center hover:bg-gray-50';
 
         const status = o['Order Status'] || 'Pending';
         const statusLower = status.toLowerCase();
-
         const statusColor =
           statusLower === 'delivered'
             ? 'text-green-600'
@@ -80,63 +72,86 @@
 
         const dateDisplay = o['Date'] || (o.createdAt ? new Date(o.createdAt).toLocaleString() : '-');
 
+        let actionBtn = '';
+        if (statusLower === 'pending') {
+          actionBtn = `<button onclick="markOutForDelivery('${o['Tracking ID']}')"
+                          class="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition">
+                          Out for Delivery
+                       </button>`;
+        } else if (statusLower === 'out for delivery') {
+          actionBtn = `<button onclick="markDelivered('${o['Tracking ID']}')"
+                          class="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 transition">
+                          Mark Delivered
+                       </button>`;
+        } else {
+          actionBtn = `<span class="text-gray-500">✅ Done</span>`;
+        }
+
         tr.innerHTML = `
           <td class="py-2 px-4">${index + 1}</td>
           <td class="py-2 px-4">${dateDisplay}</td>
           <td class="py-2 px-4">${o['Name'] || '-'}</td>
           <td class="py-2 px-4">${o['Ph no'] || o['Phone'] || '-'}</td>
-          <td class="py-2 px-4">${o['Item'] || '-'}</td>
+          <td class="py-2 px-4">${o['Item'] || o['Items'] || '-'}</td>
           <td class="py-2 px-4">${o['Quantity'] || o['Qty'] || '-'}</td>
-          <td class="py-2 px-4">₹${o['Amount'] || '0'}</td>
+          <td class="py-2 px-4">₹${o['Amount'] || o['total'] || 0}</td>
           <td class="py-2 px-4 font-mono">${o['Tracking ID'] || '-'}</td>
-          <td class="py-2 px-4 font-bold ${statusColor}">${status}</td>
-          <td class="py-2 px-4">
-            ${
-              statusLower !== 'delivered'
-                ? `<button onclick="markDelivered('${o['Tracking ID']}')"
-                    class="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 transition">
-                    Mark Delivered
-                   </button>`
-                : `<span class="text-gray-500">✅ Done</span>`
-            }
-          </td>
+          <td class="py-2 px-4 font-bold ${statusColor}" id="status-${o['Tracking ID']}">${status}</td>
+          <td class="py-2 px-4">${actionBtn}</td>
         `;
         tbody.appendChild(tr);
       });
     }
 
-    // 📡 Socket: Load All Orders
+    // Socket listeners
     socket.on('all-orders', (orders) => {
       currentOrders = orders;
       renderOrders(currentOrders);
     });
 
-    // 🆕 Socket: New Order Arrived
     socket.on('new-order', (order) => {
       currentOrders.push(order);
       renderOrders(currentOrders);
     });
 
-    // ✅ Mark Delivered
-    async function markDelivered(trackingId) {
-      if (!confirm(`Mark order ${trackingId} as Delivered?`)) return;
-      const res = await fetch('/update-status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trackingId, newStatus: 'Delivered' })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        alert('❌ ' + data.error);
+    // Update status helper
+    async function updateStatus(trackingId, status) {
+      try {
+        const res = await fetch('/update-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trackingId, newStatus: status })
+        });
+        const data = await res.json();
+        if (!res.ok) alert('❌ ' + data.error);
+      } catch (err) {
+        console.error(err);
+        alert('❌ Server error');
       }
     }
 
-    // 🧹 Clear All Orders
+    // Status actions
+    async function markOutForDelivery(trackingId) {
+      if (!confirm(`Mark order ${trackingId} as Out for Delivery?`)) return;
+      await updateStatus(trackingId, 'Out for Delivery');
+    }
+
+    async function markDelivered(trackingId) {
+      if (!confirm(`Mark order ${trackingId} as Delivered?`)) return;
+      await updateStatus(trackingId, 'Delivered');
+    }
+
+    // Clear orders
     async function resetOrders() {
       if (!confirm('⚠ Are you sure you want to clear all orders?')) return;
-      const res = await fetch('/reset-orders', { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) alert('❌ ' + data.error);
+      try {
+        const res = await fetch('/reset-orders', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) alert('❌ ' + data.error);
+      } catch (err) {
+        console.error(err);
+        alert('❌ Server error');
+      }
     }
   </script>
 
