@@ -1,57 +1,133 @@
+// ========================
+// Admin Dashboard JS
+// ========================
+
 const tbody = document.querySelector('#ordersTable tbody');
+let currentOrders = [];
 
-// Fetch all orders
-async function fetchOrders() {
-  try {
-    const res = await fetch('/all-orders');
-    const data = await res.json();
-    tbody.innerHTML = '';
+// ========================
+// 🧾 Render Orders Table
+// ========================
+function renderOrders(orders) {
+  tbody.innerHTML = '';
 
-    data.forEach(order => {
-      const tr = document.createElement('tr');
+  orders.slice().reverse().forEach(order => {
+    const tr = document.createElement('tr');
 
-      const itemsList = order.items.map(i => `${i.name} x${i.qty}`).join(', ');
+    const itemsList = order.items ? order.items.map(i => `${i.name} x${i.qty}`).join(', ') : '-';
 
-      tr.innerHTML = `
-        <td>${order.orderId}</td>
-        <td>${order.name}</td>
-        <td>${order.gmail}</td>
-        <td>${order.phone}</td>
-        <td>${order.address}</td>
-        <td>${order.persons}</td>
-        <td>${itemsList}</td>
-        <td>${order.total}</td>
-        <td>${order.status}</td>
-        <td>${order.timestamp}</td>
-        <td>
-          <select data-id="${order.orderId}">
-            <option ${order.status==='Preparing'?'selected':''}>Preparing</option>
-            <option ${order.status==='Out for Delivery'?'selected':''}>Out for Delivery</option>
-            <option ${order.status==='Delivered'?'selected':''}>Delivered</option>
-          </select>
-        </td>
-      `;
+    // Determine status and color
+    const status = order.status || order['Order Status'] || 'Pending';
+    let statusColor = 'text-yellow-600';
+    if (status.toLowerCase() === 'out for delivery') statusColor = 'text-blue-600';
+    if (status.toLowerCase() === 'delivered') statusColor = 'text-green-600';
 
-      tbody.appendChild(tr);
-    });
+    const dateDisplay = order.timestamp || order.createdAt
+      ? new Date(order.timestamp || order.createdAt).toLocaleString()
+      : '-';
 
-    // Add event listener for all dropdowns
-    document.querySelectorAll('select').forEach(select => {
-      select.addEventListener('change', async (e) => {
-        const orderId = e.target.dataset.id;
-        const status = e.target.value;
-        await fetch('/update-status', {
+    tr.innerHTML = `
+      <td>${order.orderId || order['Tracking ID']}</td>
+      <td>${order.name || order['Name']}</td>
+      <td>${order.gmail || order['Gmail'] || '-'}</td>
+      <td>${order.phone || order['Ph no'] || '-'}</td>
+      <td>${order.address || '-'}</td>
+      <td>${order.persons || '-'}</td>
+      <td>${itemsList}</td>
+      <td>${order.total || order['Amount'] || 0}</td>
+      <td class="${statusColor} font-bold">${status}</td>
+      <td>${dateDisplay}</td>
+      <td>
+        <select data-id="${order.orderId || order['Tracking ID']}">
+          <option ${status === 'Preparing' || status === 'Pending' ? 'selected' : ''}>Preparing</option>
+          <option ${status === 'Out for Delivery' ? 'selected' : ''}>Out for Delivery</option>
+          <option ${status === 'Delivered' ? 'selected' : ''}>Delivered</option>
+        </select>
+      </td>
+    `;
+
+    tbody.appendChild(tr);
+  });
+
+  attachDropdownListeners();
+}
+
+// ========================
+// 🎛 Attach Dropdown Listeners
+// ========================
+function attachDropdownListeners() {
+  document.querySelectorAll('select').forEach(select => {
+    select.addEventListener('change', async (e) => {
+      const id = e.target.dataset.id;
+      const newStatus = e.target.value;
+
+      try {
+        const res = await fetch('/update-status', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderId, status })
+          body: JSON.stringify({ trackingId: id, newStatus })
         });
-        fetchOrders(); // Refresh table
-      });
-    });
 
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to update status');
+
+        // Update row color immediately
+        const row = e.target.closest('tr');
+        const statusCell = row.cells[8];
+        statusCell.textContent = newStatus;
+        statusCell.className = newStatus.toLowerCase() === 'delivered'
+          ? 'text-green-600 font-bold'
+          : newStatus.toLowerCase() === 'out for delivery'
+          ? 'text-blue-600 font-bold'
+          : 'text-yellow-600 font-bold';
+
+      } catch (err) {
+        console.error('Error updating status:', err);
+        alert('❌ Failed to update status');
+      }
+    });
+  });
+}
+
+// ========================
+// 📡 Socket.IO Live Updates
+// ========================
+const socket = io();
+
+// Load all orders initially
+socket.on('all-orders', (orders) => {
+  currentOrders = orders;
+  renderOrders(currentOrders);
+});
+
+// New order received
+socket.on('new-order', (order) => {
+  currentOrders.push(order);
+  renderOrders(currentOrders);
+});
+
+// Status updated by another admin
+socket.on('update-status', (updatedOrder) => {
+  const index = currentOrders.findIndex(o => o['Tracking ID'] === updatedOrder['Tracking ID']);
+  if (index > -1) {
+    currentOrders[index] = updatedOrder;
+    renderOrders(currentOrders);
+  }
+});
+
+// ========================
+// 🌐 Fallback: Fetch Orders
+// ========================
+async function fetchOrders() {
+  try {
+    const res = await fetch('/api/orders');
+    const orders = await res.json();
+    currentOrders = orders;
+    renderOrders(currentOrders);
   } catch (err) {
     console.error('Error fetching orders:', err);
   }
 }
 
+// Initial fetch
 fetchOrders();

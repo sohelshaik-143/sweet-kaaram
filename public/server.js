@@ -94,8 +94,8 @@ app.post('/update-status', (req, res) => {
 
 // Reset all orders manually
 app.post('/reset-orders', (req, res) => {
-  saveOrders([]);
-  io.emit('all-orders', []);
+  saveOrders([]); // This will clear the Excel file
+  io.emit('all-orders', []); // Notify admin dashboard
   res.json({ success: true, message: 'All orders cleared manually.' });
 });
 

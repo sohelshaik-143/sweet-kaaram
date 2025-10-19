@@ -9,12 +9,14 @@
 </head>
 <body class="bg-gray-100 font-sans">
 
+  <!-- Header -->
   <header class="bg-red-700 text-white p-6 text-center shadow">
     <h1 class="text-4xl font-bold">🍬 Sweet & Karam - Admin Dashboard</h1>
   </header>
 
   <main class="container mx-auto my-10 px-4">
 
+    <!-- Top Buttons -->
     <div class="flex flex-wrap gap-3 justify-end items-center mb-6">
       <a href="/download-excel"
          class="bg-green-600 text-white px-5 py-3 rounded-lg text-lg font-semibold hover:bg-green-700 transition shadow-lg">
@@ -27,6 +29,7 @@
       </button>
     </div>
 
+    <!-- Orders Table -->
     <div id="ordersTable" class="overflow-x-auto bg-white rounded shadow">
       <table class="min-w-full">
         <thead class="bg-red-700 text-white">
@@ -53,15 +56,16 @@
     const socket = io();
     let currentOrders = [];
 
-    function renderOrders(orders) {
+    // Render orders
+    function renderOrders() {
       const tbody = document.getElementById('ordersBody');
       tbody.innerHTML = '';
 
-      orders.slice().reverse().forEach((o, index) => {
+      currentOrders.slice().reverse().forEach((o, index) => {
         const tr = document.createElement('tr');
         tr.className = 'border-b text-center hover:bg-gray-50';
 
-        const status = o['Order Status'] || 'Pending';
+        const status = o.status || o['Order Status'] || 'Pending';
         const statusLower = status.toLowerCase();
         const statusColor =
           statusLower === 'delivered'
@@ -70,7 +74,16 @@
             ? 'text-blue-600'
             : 'text-yellow-600';
 
-        const dateDisplay = o['Date'] || (o.createdAt ? new Date(o.createdAt).toLocaleString() : '-');
+        const dateDisplay = o.timestamp || o.createdAt
+          ? new Date(o.timestamp || o.createdAt).toLocaleString()
+          : '-';
+
+        const itemsList = Array.isArray(o.items) && o.items.length
+          ? o.items.map(i => `${i.name} x${i.qty}`).join(', ')
+          : o.Item || '-';
+        const qtyTotal = Array.isArray(o.items) && o.items.length
+          ? o.items.reduce((sum, i) => sum + (i.qty || 0), 0)
+          : o.Quantity || o.Qty || '-';
 
         let actionBtn = '';
         if (statusLower === 'pending') {
@@ -90,11 +103,11 @@
         tr.innerHTML = `
           <td class="py-2 px-4">${index + 1}</td>
           <td class="py-2 px-4">${dateDisplay}</td>
-          <td class="py-2 px-4">${o['Name'] || '-'}</td>
-          <td class="py-2 px-4">${o['Ph no'] || o['Phone'] || '-'}</td>
-          <td class="py-2 px-4">${o['Item'] || o['Items'] || '-'}</td>
-          <td class="py-2 px-4">${o['Quantity'] || o['Qty'] || '-'}</td>
-          <td class="py-2 px-4">₹${o['Amount'] || o['total'] || 0}</td>
+          <td class="py-2 px-4">${o.Name || o.name || '-'}</td>
+          <td class="py-2 px-4">${o['Ph no'] || o.Phone || o.phone || '-'}</td>
+          <td class="py-2 px-4">${itemsList}</td>
+          <td class="py-2 px-4">${qtyTotal}</td>
+          <td class="py-2 px-4">₹${o.Amount || o.total || 0}</td>
           <td class="py-2 px-4 font-mono">${o['Tracking ID'] || '-'}</td>
           <td class="py-2 px-4 font-bold ${statusColor}" id="status-${o['Tracking ID']}">${status}</td>
           <td class="py-2 px-4">${actionBtn}</td>
@@ -102,17 +115,6 @@
         tbody.appendChild(tr);
       });
     }
-
-    // Socket listeners
-    socket.on('all-orders', (orders) => {
-      currentOrders = orders;
-      renderOrders(currentOrders);
-    });
-
-    socket.on('new-order', (order) => {
-      currentOrders.push(order);
-      renderOrders(currentOrders);
-    });
 
     // Update status helper
     async function updateStatus(trackingId, status) {
@@ -141,7 +143,7 @@
       await updateStatus(trackingId, 'Delivered');
     }
 
-    // Clear orders
+    // Clear orders (does not remove orders from dashboard live)
     async function resetOrders() {
       if (!confirm('⚠ Are you sure you want to clear all orders?')) return;
       try {
@@ -153,6 +155,31 @@
         alert('❌ Server error');
       }
     }
+
+    // Socket listeners
+    socket.on('all-orders', (orders) => {
+      currentOrders = orders; // keep all previous orders
+      renderOrders();
+    });
+
+    socket.on('new-order', (order) => {
+      currentOrders.push(order);
+      renderOrders();
+    });
+
+    // Initial fetch fallback
+    async function fetchOrders() {
+      try {
+        const res = await fetch('/api/orders');
+        const orders = await res.json();
+        currentOrders = orders;
+        renderOrders();
+      } catch (err) {
+        console.error('Error fetching orders:', err);
+      }
+    }
+
+    fetchOrders();
   </script>
 
 </body>
