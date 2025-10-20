@@ -131,7 +131,6 @@ document.getElementById('addOrderForm').addEventListener('submit', async e => {
     });
     const data = await res.json();
     if (data.success) {
-      // ✅ Fixed property name to match server
       alert(`✅ Order Placed! Tracking ID: ${data.trackingId}`);
       document.getElementById('addOrderForm').reset();
     } else alert('❌ Failed to place order');
