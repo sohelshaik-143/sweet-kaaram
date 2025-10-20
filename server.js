@@ -22,7 +22,6 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Helpers
 // ========================
 function generateTrackingID() {
-  // Unique ID with timestamp + random number
   return `SK${Date.now()}${Math.floor(1000 + Math.random() * 9000)}`;
 }
 
@@ -35,12 +34,20 @@ function readOrders() {
   const orders = XLSX.utils.sheet_to_json(worksheet);
 
   return orders.map(order => {
+    // Ensure items array
     if (order.items && typeof order.items === 'string') {
       try { order.items = JSON.parse(order.items); } catch { order.items = []; }
     } else if (!order.items) order.items = [];
 
+    // Ensure each item has name, qty, price
+    order.items = order.items.map(i => ({
+      name: i.name || 'Unnamed',
+      qty: Number(i.qty) || 1,
+      price: Number(i.price) || 0
+    }));
+
     if (!order.totalAmount) {
-      order.totalAmount = order.items.reduce((sum, i) => sum + ((i.price||0)*(i.qty||0)), 0);
+      order.totalAmount = order.items.reduce((sum, i) => sum + (i.qty * i.price), 0);
     }
 
     if (!order['Tracking ID']) order['Tracking ID'] = generateTrackingID();
