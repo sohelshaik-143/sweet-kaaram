@@ -18,8 +18,11 @@ const excelFilePath = path.join(__dirname, EXCEL_FILE);
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// ========================
 // Helpers
+// ========================
 function generateTrackingID() {
+  // Unique ID with timestamp + random number
   return `SK${Date.now()}${Math.floor(1000 + Math.random() * 9000)}`;
 }
 
@@ -32,25 +35,17 @@ function readOrders() {
   const orders = XLSX.utils.sheet_to_json(worksheet);
 
   return orders.map(order => {
-    // Parse items JSON safely
     if (order.items && typeof order.items === 'string') {
-      try { 
-        order.items = JSON.parse(order.items); 
-      } catch { 
-        order.items = []; 
-      }
-    } else if (!order.items) {
-      order.items = [];
+      try { order.items = JSON.parse(order.items); } catch { order.items = []; }
+    } else if (!order.items) order.items = [];
+
+    if (!order.totalAmount) {
+      order.totalAmount = order.items.reduce((sum, i) => sum + ((i.price||0)*(i.qty||0)), 0);
     }
 
-    // Calculate totalAmount if missing
-    if (!order.totalAmount && order.items.length > 0) {
-      order.totalAmount = order.items.reduce((sum, i) => sum + ((i.price || 0) * (i.qty || 0)), 0);
-    }
-
-    // Ensure Tracking ID and Status exist
     if (!order['Tracking ID']) order['Tracking ID'] = generateTrackingID();
     if (!order['Order Status']) order['Order Status'] = 'Pending';
+    if (!order.createdAt) order.createdAt = new Date().toISOString();
 
     return order;
   });
@@ -74,7 +69,9 @@ function appendOrder(order) {
   saveOrders(orders);
 }
 
+// ========================
 // Routes
+// ========================
 app.get('/', (req, res) => res.send('✅ Server running. Visit /admin for dashboard.'));
 
 app.post('/order', (req, res) => {
@@ -85,10 +82,7 @@ app.post('/order', (req, res) => {
     createdAt: new Date().toISOString()
   };
 
-  // Ensure items is an array
   if (!Array.isArray(newOrder.items)) newOrder.items = [];
-
-  // Calculate totalAmount
   newOrder.totalAmount = newOrder.items.reduce((sum, i) => sum + ((i.price||0)*(i.qty||0)), 0);
 
   appendOrder(newOrder);
@@ -118,12 +112,17 @@ app.get('/download-excel', (req, res) => {
   res.download(excelFilePath, 'orders.xlsx');
 });
 
+// ========================
 // Socket.IO
+// ========================
 io.on('connection', (socket) => {
   console.log('Admin connected');
   socket.emit('all-orders', readOrders());
+
   socket.on('disconnect', () => console.log('Admin disconnected'));
 });
 
+// ========================
 // Start server
+// ========================
 server.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));

@@ -1,38 +1,29 @@
-// ========================
-// Admin Dashboard JS
-// ========================
-
 const tbody = document.getElementById('ordersBody');
 let currentOrders = [];
 
 // ========================
-// 🧾 Render Orders Table
+// Render Orders Table
 // ========================
 function renderOrders(newOrderId = null) {
   tbody.innerHTML = '';
 
-  // Show newest orders first
   currentOrders.slice().reverse().forEach((order, index) => {
     const tr = document.createElement('tr');
     tr.className = 'border-b text-center hover:bg-gray-50';
     if (order['Tracking ID'] === newOrderId) tr.classList.add('new-order');
 
-    // Items display with qty x price
     const itemsList = Array.isArray(order.items) && order.items.length
       ? order.items.map(i => `${i.name} (${i.qty} x ₹${i.price})`).join(', ')
       : '-';
 
-    // Total qty
     const qtyTotal = Array.isArray(order.items)
       ? order.items.reduce((sum, i) => sum + (i.qty || 0), 0)
       : 0;
 
-    // Total amount
     const totalAmount = order.totalAmount ?? (Array.isArray(order.items)
       ? order.items.reduce((sum, i) => sum + ((i.price || 0) * (i.qty || 0)), 0)
       : 0);
 
-    // Status & color
     const status = order['Order Status'] || 'Pending';
     const statusLower = status.toLowerCase();
     const statusColor =
@@ -40,10 +31,8 @@ function renderOrders(newOrderId = null) {
       statusLower === 'out for delivery' ? 'text-blue-600' :
       'text-yellow-600';
 
-    // Date display
     const dateDisplay = order.createdAt ? new Date(order.createdAt).toLocaleString() : '-';
 
-    // Action buttons
     let actionBtn = '';
     if (statusLower === 'pending') {
       actionBtn = `<button onclick="updateStatus('${order['Tracking ID']}','Out for Delivery')" class="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition">Out for Delivery</button>`;
@@ -70,7 +59,7 @@ function renderOrders(newOrderId = null) {
 }
 
 // ========================
-// ⚡ Update Status
+// Update Order Status
 // ========================
 async function updateStatus(trackingId, newStatus) {
   try {
@@ -79,50 +68,74 @@ async function updateStatus(trackingId, newStatus) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ trackingId, newStatus })
     });
-
     const data = await res.json();
     if (!data.success) throw new Error(data.error || 'Failed to update status');
 
-    // Update locally
-    const orderIndex = currentOrders.findIndex(o => o['Tracking ID'] === trackingId);
-    if (orderIndex > -1) {
-      currentOrders[orderIndex]['Order Status'] = newStatus;
+    const index = currentOrders.findIndex(o => o['Tracking ID'] === trackingId);
+    if (index > -1) {
+      currentOrders[index]['Order Status'] = newStatus;
       renderOrders(trackingId);
     }
   } catch (err) {
-    console.error('Error updating status:', err);
+    console.error(err);
     alert('❌ Failed to update status');
   }
 }
 
 // ========================
-// 📡 Socket.IO Live Updates
+// Socket.IO Live Updates
 // ========================
 const socket = io();
 
-socket.on('all-orders', (orders) => {
+socket.on('all-orders', orders => {
   currentOrders = orders;
   renderOrders();
 });
 
-socket.on('new-order', (order) => {
+socket.on('new-order', order => {
   currentOrders.push(order);
   renderOrders(order['Tracking ID']);
 });
 
 // ========================
-// 🌐 Fetch Orders (Fallback)
+// Fallback: Fetch Orders
 // ========================
 async function fetchOrders() {
   try {
     const res = await fetch('/api/orders');
-    const orders = await res.json();
-    currentOrders = orders;
+    currentOrders = await res.json();
     renderOrders();
   } catch (err) {
-    console.error('Error fetching orders:', err);
+    console.error(err);
   }
 }
 
-// Initial fetch
 fetchOrders();
+
+// ========================
+// Add Order Form Handling
+// ========================
+document.getElementById('addOrderForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const name = document.getElementById('name').value.trim();
+  const phone = document.getElementById('phone').value.trim();
+  let items = [];
+  try { items = JSON.parse(document.getElementById('items').value); } 
+  catch { alert('Invalid items JSON'); return; }
+
+  try {
+    const res = await fetch('/order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, phone, items })
+    });
+    const data = await res.json();
+    if (data.success) {
+      alert(`✅ Order Placed! Tracking ID: ${data.orderId}`);
+      document.getElementById('addOrderForm').reset();
+    } else alert('❌ Failed to place order');
+  } catch (err) {
+    console.error(err);
+    alert('❌ Server error');
+  }
+});
