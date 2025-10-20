@@ -121,7 +121,7 @@ document.getElementById('addOrderForm').addEventListener('submit', async e => {
   const phone = document.getElementById('phone').value.trim();
   let items = [];
   try { items = JSON.parse(document.getElementById('items').value); } 
-  catch { alert('Invalid items JSON'); return; }
+  catch { alert('❌ Invalid items JSON'); return; }
 
   try {
     const res = await fetch('/order', {
@@ -131,7 +131,8 @@ document.getElementById('addOrderForm').addEventListener('submit', async e => {
     });
     const data = await res.json();
     if (data.success) {
-      alert(`✅ Order Placed! Tracking ID: ${data.orderId}`);
+      // ✅ Fixed property name to match server
+      alert(`✅ Order Placed! Tracking ID: ${data.trackingId}`);
       document.getElementById('addOrderForm').reset();
     } else alert('❌ Failed to place order');
   } catch (err) {
