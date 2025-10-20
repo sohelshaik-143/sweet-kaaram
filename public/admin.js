@@ -2,91 +2,97 @@
 // Admin Dashboard JS
 // ========================
 
-const tbody = document.querySelector('#ordersTable tbody');
+const tbody = document.getElementById('ordersBody');
 let currentOrders = [];
 
 // ========================
 // 🧾 Render Orders Table
 // ========================
-function renderOrders(orders) {
+function renderOrders(newOrderId = null) {
   tbody.innerHTML = '';
 
-  orders.slice().reverse().forEach(order => {
+  // Show newest orders first
+  currentOrders.slice().reverse().forEach((order, index) => {
     const tr = document.createElement('tr');
+    tr.className = 'border-b text-center hover:bg-gray-50';
+    if (order['Tracking ID'] === newOrderId) tr.classList.add('new-order');
 
-    const itemsList = order.items ? order.items.map(i => `${i.name} x${i.qty}`).join(', ') : '-';
-
-    // Determine status and color
-    const status = order.status || order['Order Status'] || 'Pending';
-    let statusColor = 'text-yellow-600';
-    if (status.toLowerCase() === 'out for delivery') statusColor = 'text-blue-600';
-    if (status.toLowerCase() === 'delivered') statusColor = 'text-green-600';
-
-    const dateDisplay = order.timestamp || order.createdAt
-      ? new Date(order.timestamp || order.createdAt).toLocaleString()
+    // Items display with qty x price
+    const itemsList = Array.isArray(order.items) && order.items.length
+      ? order.items.map(i => `${i.name} (${i.qty} x ₹${i.price})`).join(', ')
       : '-';
 
-    tr.innerHTML = `
-      <td>${order.orderId || order['Tracking ID']}</td>
-      <td>${order.name || order['Name']}</td>
-      <td>${order.gmail || order['Gmail'] || '-'}</td>
-      <td>${order.phone || order['Ph no'] || '-'}</td>
-      <td>${order.address || '-'}</td>
-      <td>${order.persons || '-'}</td>
-      <td>${itemsList}</td>
-      <td>${order.total || order['Amount'] || 0}</td>
-      <td class="${statusColor} font-bold">${status}</td>
-      <td>${dateDisplay}</td>
-      <td>
-        <select data-id="${order.orderId || order['Tracking ID']}">
-          <option ${status === 'Preparing' || status === 'Pending' ? 'selected' : ''}>Preparing</option>
-          <option ${status === 'Out for Delivery' ? 'selected' : ''}>Out for Delivery</option>
-          <option ${status === 'Delivered' ? 'selected' : ''}>Delivered</option>
-        </select>
-      </td>
-    `;
+    // Total qty
+    const qtyTotal = Array.isArray(order.items)
+      ? order.items.reduce((sum, i) => sum + (i.qty || 0), 0)
+      : 0;
 
+    // Total amount
+    const totalAmount = order.totalAmount ?? (Array.isArray(order.items)
+      ? order.items.reduce((sum, i) => sum + ((i.price || 0) * (i.qty || 0)), 0)
+      : 0);
+
+    // Status & color
+    const status = order['Order Status'] || 'Pending';
+    const statusLower = status.toLowerCase();
+    const statusColor =
+      statusLower === 'delivered' ? 'text-green-600' :
+      statusLower === 'out for delivery' ? 'text-blue-600' :
+      'text-yellow-600';
+
+    // Date display
+    const dateDisplay = order.createdAt ? new Date(order.createdAt).toLocaleString() : '-';
+
+    // Action buttons
+    let actionBtn = '';
+    if (statusLower === 'pending') {
+      actionBtn = `<button onclick="updateStatus('${order['Tracking ID']}','Out for Delivery')" class="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition">Out for Delivery</button>`;
+    } else if (statusLower === 'out for delivery') {
+      actionBtn = `<button onclick="updateStatus('${order['Tracking ID']}','Delivered')" class="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 transition">Mark Delivered</button>`;
+    } else {
+      actionBtn = `<span class="text-gray-500">✅ Done</span>`;
+    }
+
+    tr.innerHTML = `
+      <td class="py-2 px-4">${index + 1}</td>
+      <td class="py-2 px-4">${dateDisplay}</td>
+      <td class="py-2 px-4">${order.name || '-'}</td>
+      <td class="py-2 px-4">${order.phone || '-'}</td>
+      <td class="py-2 px-4">${itemsList}</td>
+      <td class="py-2 px-4">${qtyTotal}</td>
+      <td class="py-2 px-4">₹${totalAmount}</td>
+      <td class="py-2 px-4 font-mono">${order['Tracking ID'] || '-'}</td>
+      <td class="py-2 px-4 font-bold ${statusColor}">${status}</td>
+      <td class="py-2 px-4">${actionBtn}</td>
+    `;
     tbody.appendChild(tr);
   });
-
-  attachDropdownListeners();
 }
 
 // ========================
-// 🎛 Attach Dropdown Listeners
+// ⚡ Update Status
 // ========================
-function attachDropdownListeners() {
-  document.querySelectorAll('select').forEach(select => {
-    select.addEventListener('change', async (e) => {
-      const id = e.target.dataset.id;
-      const newStatus = e.target.value;
-
-      try {
-        const res = await fetch('/update-status', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ trackingId: id, newStatus })
-        });
-
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to update status');
-
-        // Update row color immediately
-        const row = e.target.closest('tr');
-        const statusCell = row.cells[8];
-        statusCell.textContent = newStatus;
-        statusCell.className = newStatus.toLowerCase() === 'delivered'
-          ? 'text-green-600 font-bold'
-          : newStatus.toLowerCase() === 'out for delivery'
-          ? 'text-blue-600 font-bold'
-          : 'text-yellow-600 font-bold';
-
-      } catch (err) {
-        console.error('Error updating status:', err);
-        alert('❌ Failed to update status');
-      }
+async function updateStatus(trackingId, newStatus) {
+  try {
+    const res = await fetch('/update-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trackingId, newStatus })
     });
-  });
+
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Failed to update status');
+
+    // Update locally
+    const orderIndex = currentOrders.findIndex(o => o['Tracking ID'] === trackingId);
+    if (orderIndex > -1) {
+      currentOrders[orderIndex]['Order Status'] = newStatus;
+      renderOrders(trackingId);
+    }
+  } catch (err) {
+    console.error('Error updating status:', err);
+    alert('❌ Failed to update status');
+  }
 }
 
 // ========================
@@ -94,36 +100,25 @@ function attachDropdownListeners() {
 // ========================
 const socket = io();
 
-// Load all orders initially
 socket.on('all-orders', (orders) => {
   currentOrders = orders;
-  renderOrders(currentOrders);
+  renderOrders();
 });
 
-// New order received
 socket.on('new-order', (order) => {
   currentOrders.push(order);
-  renderOrders(currentOrders);
-});
-
-// Status updated by another admin
-socket.on('update-status', (updatedOrder) => {
-  const index = currentOrders.findIndex(o => o['Tracking ID'] === updatedOrder['Tracking ID']);
-  if (index > -1) {
-    currentOrders[index] = updatedOrder;
-    renderOrders(currentOrders);
-  }
+  renderOrders(order['Tracking ID']);
 });
 
 // ========================
-// 🌐 Fallback: Fetch Orders
+// 🌐 Fetch Orders (Fallback)
 // ========================
 async function fetchOrders() {
   try {
     const res = await fetch('/api/orders');
     const orders = await res.json();
     currentOrders = orders;
-    renderOrders(currentOrders);
+    renderOrders();
   } catch (err) {
     console.error('Error fetching orders:', err);
   }

@@ -32,16 +32,23 @@ function readOrders() {
   const orders = XLSX.utils.sheet_to_json(worksheet);
 
   return orders.map(order => {
-    // Parse items JSON
+    // Parse items JSON safely
     if (order.items && typeof order.items === 'string') {
-      try { order.items = JSON.parse(order.items); } catch { order.items = []; }
-    } else if (!order.items) order.items = [];
-
-    // Calculate total amount only if missing
-    if (!order.totalAmount) {
-      order.totalAmount = order.items.reduce((sum, i) => sum + ((i.price||0) * (i.qty||0)), 0);
+      try { 
+        order.items = JSON.parse(order.items); 
+      } catch { 
+        order.items = []; 
+      }
+    } else if (!order.items) {
+      order.items = [];
     }
 
+    // Calculate totalAmount if missing
+    if (!order.totalAmount && order.items.length > 0) {
+      order.totalAmount = order.items.reduce((sum, i) => sum + ((i.price || 0) * (i.qty || 0)), 0);
+    }
+
+    // Ensure Tracking ID and Status exist
     if (!order['Tracking ID']) order['Tracking ID'] = generateTrackingID();
     if (!order['Order Status']) order['Order Status'] = 'Pending';
 
@@ -77,7 +84,11 @@ app.post('/order', (req, res) => {
     'Order Status': 'Pending',
     createdAt: new Date().toISOString()
   };
+
+  // Ensure items is an array
   if (!Array.isArray(newOrder.items)) newOrder.items = [];
+
+  // Calculate totalAmount
   newOrder.totalAmount = newOrder.items.reduce((sum, i) => sum + ((i.price||0)*(i.qty||0)), 0);
 
   appendOrder(newOrder);
