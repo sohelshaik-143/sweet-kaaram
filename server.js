@@ -14,122 +14,98 @@ const PORT = process.env.PORT || 5200;
 const EXCEL_FILE = 'orders.xlsx';
 const excelFilePath = path.join(__dirname, EXCEL_FILE);
 
-// Middleware
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ========================
 // Helpers
-// ========================
 function generateTrackingID() {
-  return `SK${Date.now()}${Math.floor(1000 + Math.random() * 9000)}`;
+    return `SK${Date.now()}${Math.floor(1000 + Math.random() * 9000)}`;
 }
 
 function readOrders() {
-  if (!fs.existsSync(excelFilePath)) return [];
-  const workbook = XLSX.readFile(excelFilePath);
-  const worksheet = workbook.Sheets['Orders'];
-  if (!worksheet) return [];
-
-  const orders = XLSX.utils.sheet_to_json(worksheet);
-
-  return orders.map(order => {
-    // Ensure items array
-    if (order.items && typeof order.items === 'string') {
-      try { order.items = JSON.parse(order.items); } catch { order.items = []; }
-    } else if (!order.items) order.items = [];
-
-    // Ensure each item has name, qty, price
-    order.items = order.items.map(i => ({
-      name: i.name || 'Unnamed',
-      qty: Number(i.qty) || 1,
-      price: Number(i.price) || 0
-    }));
-
-    if (!order.totalAmount) {
-      order.totalAmount = order.items.reduce((sum, i) => sum + (i.qty * i.price), 0);
-    }
-
-    if (!order['Tracking ID']) order['Tracking ID'] = generateTrackingID();
-    if (!order['Order Status']) order['Order Status'] = 'Pending';
-    if (!order.createdAt) order.createdAt = new Date().toISOString();
-
-    return order;
-  });
+    if (!fs.existsSync(excelFilePath)) return [];
+    const workbook = XLSX.readFile(excelFilePath);
+    const worksheet = workbook.Sheets['Orders'];
+    if (!worksheet) return [];
+    const orders = XLSX.utils.sheet_to_json(worksheet);
+    return orders.map(order => {
+        if (order.items && typeof order.items === 'string') {
+            try { order.items = JSON.parse(order.items); } catch { order.items = []; }
+        } else if (!order.items) order.items = [];
+        order.items = order.items.map(i => ({
+            name: i.name || 'Unnamed',
+            qty: Number(i.qty) || 1,
+            price: Number(i.price) || 0
+        }));
+        if (!order.totalAmount) {
+            order.totalAmount = order.items.reduce((sum, i) => sum + (i.qty * i.price), 0);
+        }
+        if (!order['Tracking ID']) order['Tracking ID'] = generateTrackingID();
+        if (!order['Order Status']) order['Order Status'] = 'Pending';
+        if (!order.createdAt) order.createdAt = new Date().toISOString();
+        return order;
+    });
 }
 
 function saveOrders(orders) {
-  const ordersToSave = orders.map(order => ({
-    ...order,
-    items: order.items ? JSON.stringify(order.items) : '[]'
-  }));
-
-  const workbook = XLSX.utils.book_new();
-  const worksheet = XLSX.utils.json_to_sheet(ordersToSave);
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders');
-  XLSX.writeFile(workbook, excelFilePath);
+    const ordersToSave = orders.map(order => ({
+        ...order,
+        items: JSON.stringify(order.items)
+    }));
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(ordersToSave);
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders');
+    XLSX.writeFile(workbook, excelFilePath);
 }
 
 function appendOrder(order) {
-  const orders = readOrders();
-  orders.push(order);
-  saveOrders(orders);
+    const orders = readOrders();
+    orders.push(order);
+    saveOrders(orders);
 }
 
-// ========================
 // Routes
-// ========================
-app.get('/', (req, res) => res.send('✅ Server running. Visit /admin for dashboard.'));
+app.get('/', (req, res) => res.send('✅ Server running. Visit /admin'));
 
 app.post('/order', (req, res) => {
-  const newOrder = {
-    ...req.body,
-    'Tracking ID': generateTrackingID(),
-    'Order Status': 'Pending',
-    createdAt: new Date().toISOString()
-  };
+    const newOrder = {
+        ...req.body,
+        'Tracking ID': generateTrackingID(),
+        'Order Status': 'Pending',
+        createdAt: new Date().toISOString()
+    };
+    if (!Array.isArray(newOrder.items)) newOrder.items = [];
+    newOrder.totalAmount = newOrder.items.reduce((sum, i) => sum + ((i.price||0)*(i.qty||0)), 0);
 
-  if (!Array.isArray(newOrder.items)) newOrder.items = [];
-  newOrder.totalAmount = newOrder.items.reduce((sum, i) => sum + ((i.price||0)*(i.qty||0)), 0);
-
-  appendOrder(newOrder);
-  io.emit('new-order', newOrder);
-
-  res.json({ success: true, orderId: newOrder['Tracking ID'] });
+    appendOrder(newOrder);
+    io.emit('new-order', newOrder);
+    res.json({ success: true, orderId: newOrder['Tracking ID'] });
 });
 
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public/admin.html')));
 app.get('/api/orders', (req, res) => res.json(readOrders()));
 
 app.post('/update-status', (req, res) => {
-  const { trackingId, newStatus } = req.body;
-  const orders = readOrders();
-  const order = orders.find(o => o['Tracking ID'] === trackingId);
-  if (!order) return res.status(404).json({ error: 'Order not found' });
+    const { trackingId, newStatus } = req.body;
+    const orders = readOrders();
+    const order = orders.find(o => o['Tracking ID'] === trackingId);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
 
-  order['Order Status'] = newStatus;
-  saveOrders(orders);
-  io.emit('all-orders', orders);
-
-  res.json({ success: true });
+    order['Order Status'] = newStatus;
+    saveOrders(orders);
+    io.emit('all-orders', orders);
+    res.json({ success: true });
 });
 
 app.get('/download-excel', (req, res) => {
-  if (!fs.existsSync(excelFilePath)) return res.status(404).send('Excel file not found');
-  res.download(excelFilePath, 'orders.xlsx');
+    if (!fs.existsSync(excelFilePath)) return res.status(404).send('Excel file not found');
+    res.download(excelFilePath, 'orders.xlsx');
 });
 
-// ========================
 // Socket.IO
-// ========================
-io.on('connection', (socket) => {
-  console.log('Admin connected');
-  socket.emit('all-orders', readOrders());
-
-  socket.on('disconnect', () => console.log('Admin disconnected'));
+io.on('connection', socket => {
+    socket.emit('all-orders', readOrders());
 });
 
-// ========================
 // Start server
-// ========================
 server.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
