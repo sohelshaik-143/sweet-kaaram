@@ -5,13 +5,12 @@ let currentOrders = [];
 function renderOrders(newOrderId = null) {
   tbody.innerHTML = '';
 
-  // Display latest orders first
   currentOrders.slice().reverse().forEach((order, index) => {
     const tr = document.createElement('tr');
     tr.className = 'border-b text-center hover:bg-gray-50';
-    if (order['Tracking ID'] === newOrderId) tr.classList.add('new-order');
+    if ((order['Tracking ID'] ?? order.trackingId) === newOrderId) tr.classList.add('new-order');
 
-    // ✅ Parse items safely (handles string or array)
+    // ✅ Parse items safely
     let items = [];
     if (typeof order.items === 'string') {
       try { items = JSON.parse(order.items); } catch { items = []; }
@@ -40,9 +39,9 @@ function renderOrders(newOrderId = null) {
 
     let actionBtn = '';
     if (status.toLowerCase() === 'pending') {
-      actionBtn = `<button onclick="updateStatus('${order['Tracking ID']}', 'Out for Delivery')" class="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition">Out for Delivery</button>`;
+      actionBtn = `<button onclick="updateStatus('${order['Tracking ID'] ?? order.trackingId}', 'Out for Delivery')" class="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition">Out for Delivery</button>`;
     } else if (status.toLowerCase() === 'out for delivery') {
-      actionBtn = `<button onclick="updateStatus('${order['Tracking ID']}', 'Delivered')" class="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 transition">Mark Delivered</button>`;
+      actionBtn = `<button onclick="updateStatus('${order['Tracking ID'] ?? order.trackingId}', 'Delivered')" class="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 transition">Mark Delivered</button>`;
     } else {
       actionBtn = `<span class="text-gray-500">✅ Done</span>`;
     }
@@ -55,7 +54,7 @@ function renderOrders(newOrderId = null) {
       <td class="py-2 px-4">${itemsList}</td>
       <td class="py-2 px-4">${qtyTotal}</td>
       <td class="py-2 px-4">₹${totalAmount}</td>
-      <td class="py-2 px-4 font-mono">${order['Tracking ID'] || '-'}</td>
+      <td class="py-2 px-4 font-mono">${order['Tracking ID'] ?? order.trackingId ?? '-'}</td>
       <td class="py-2 px-4 font-bold ${statusColor}">${status}</td>
       <td class="py-2 px-4">${actionBtn}</td>
     `;
@@ -75,7 +74,7 @@ async function updateStatus(trackingId, newStatus) {
     const data = await res.json();
     if (!data.success) throw new Error(data.error || 'Failed');
 
-    const index = currentOrders.findIndex(o => o['Tracking ID'] === trackingId);
+    const index = currentOrders.findIndex(o => (o['Tracking ID'] ?? o.trackingId) === trackingId);
     if (index > -1) {
       currentOrders[index]['Order Status'] = newStatus;
       renderOrders(trackingId);
@@ -88,18 +87,16 @@ async function updateStatus(trackingId, newStatus) {
 
 /* ---------------- Socket.IO ---------------- */
 const socket = io();
-
 socket.on('all-orders', orders => {
   currentOrders = orders;
   renderOrders();
 });
-
 socket.on('new-order', order => {
   currentOrders.push(order);
-  renderOrders(order['Tracking ID']);
+  renderOrders(order['Tracking ID'] ?? order.trackingId);
 });
 
-/* ---------------- Fetch Fallback ---------------- */
+/* ---------------- Fetch fallback ---------------- */
 async function fetchOrders() {
   try {
     const res = await fetch('/api/orders');
@@ -125,9 +122,7 @@ document.getElementById('addOrderForm').addEventListener('submit', async e => {
   }
 
   let items = [];
-  try {
-    items = JSON.parse(itemsInput);
-  } catch {
+  try { items = JSON.parse(itemsInput); } catch {
     alert('❌ Invalid items JSON');
     return;
   }
@@ -141,7 +136,7 @@ document.getElementById('addOrderForm').addEventListener('submit', async e => {
 
     const data = await res.json();
     if (data.success) {
-      alert(`✅ Order Placed! Tracking ID: ${data.orderId}`);
+      alert(`✅ Order Placed! Tracking ID: ${data.orderId ?? 'UNKNOWN'}`);
       document.getElementById('addOrderForm').reset();
     } else {
       alert('❌ Failed to place order');

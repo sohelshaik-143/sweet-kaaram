@@ -19,7 +19,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 /* ----------------------------- Helpers ----------------------------- */
 
-// ✅ Consistent tracking ID format
+// ✅ Generate consistent Tracking ID
 function generateTrackingID() {
   return 'SK' + Date.now().toString().slice(-8) + Math.floor(1000 + Math.random() * 9000);
 }
@@ -35,34 +35,28 @@ function readOrders() {
   const orders = XLSX.utils.sheet_to_json(worksheet);
 
   return orders.map(order => {
-    // Normalize inconsistent keys (Excel sometimes changes them)
     if (order['tracking id']) {
       order['Tracking ID'] = order['tracking id'];
       delete order['tracking id'];
     }
 
-    // Ensure valid tracking ID
     if (!order['Tracking ID'] || order['Tracking ID'] === 'undefined' || order['Tracking ID'] === '') {
       order['Tracking ID'] = generateTrackingID();
     }
 
-    // Default order status & timestamp
     if (!order['Order Status']) order['Order Status'] = 'Pending';
     if (!order.createdAt) order.createdAt = new Date().toISOString();
 
-    // Parse items
     if (order.items && typeof order.items === 'string') {
       try { order.items = JSON.parse(order.items); } catch { order.items = []; }
     } else if (!order.items) order.items = [];
 
-    // Normalize items
     order.items = order.items.map(i => ({
       name: i.name || 'Unnamed',
       qty: Number(i.qty) || 1,
       price: Number(i.price) || 0
     }));
 
-    // Auto calculate total if missing
     if (!order.totalAmount) {
       order.totalAmount = order.items.reduce((sum, i) => sum + (i.qty * i.price), 0);
     }
@@ -84,7 +78,7 @@ function saveOrders(orders) {
   XLSX.writeFile(workbook, excelFilePath);
 }
 
-// ✅ Append new order to file
+// ✅ Append new order
 function appendOrder(order) {
   const orders = readOrders();
   orders.push(order);
@@ -150,6 +144,38 @@ app.get('/download-excel', (req, res) => {
     return res.status(404).send('Excel file not found');
   }
   res.download(excelFilePath, 'orders.xlsx');
+});
+
+/* ----------------------------- User Tracking ----------------------------- */
+
+// ✅ Get user orders by phone number
+app.get('/api/orders/:phone', (req, res) => {
+  const { phone } = req.params;
+  if (!phone) return res.status(400).json({ error: 'Missing phone number' });
+
+  const orders = readOrders();
+  const userOrders = orders.filter(o => o.phone === phone);
+  
+  if (userOrders.length === 0) {
+    return res.status(404).json({ error: 'No orders found for this number' });
+  }
+
+  res.json(userOrders);
+});
+
+// ✅ Get single order by Tracking ID
+app.get('/api/track/:trackingId', (req, res) => {
+  const { trackingId } = req.params;
+  if (!trackingId) return res.status(400).json({ error: 'Missing tracking ID' });
+
+  const orders = readOrders();
+  const order = orders.find(o => o['Tracking ID'] === trackingId);
+  
+  if (!order) {
+    return res.status(404).json({ error: 'Order not found' });
+  }
+
+  res.json(order);
 });
 
 /* ----------------------------- Socket.IO ----------------------------- */
