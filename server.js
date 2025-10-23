@@ -35,30 +35,33 @@ function readOrders() {
   const orders = XLSX.utils.sheet_to_json(worksheet);
 
   return orders.map(order => {
-    // Normalize keys
+    // Normalize key names
     if (order.trackingId) { order['Tracking ID'] = order.trackingId; delete order.trackingId; }
+    if (order['tracking id']) { order['Tracking ID'] = order['tracking id']; delete order['tracking id']; }
 
-    if (!order['Tracking ID'] || order['Tracking ID'] === 'undefined' || order['Tracking ID'] === '') {
+    if (!order['Tracking ID'] || order['Tracking ID'] === 'undefined') {
       order['Tracking ID'] = generateTrackingID();
     }
 
     if (!order['Order Status']) order['Order Status'] = 'Pending';
     if (!order.createdAt) order.createdAt = new Date().toISOString();
 
-    // Parse items
-    if (order.items && typeof order.items === 'string') {
+    // Parse items safely
+    if (typeof order.items === 'string') {
       try { order.items = JSON.parse(order.items); } catch { order.items = []; }
-    } else if (!order.items) order.items = [];
+    } else if (!Array.isArray(order.items)) {
+      order.items = [];
+    }
 
+    // Normalize items
     order.items = order.items.map(i => ({
       name: i.name || 'Unnamed',
       qty: Number(i.qty) || 1,
       price: Number(i.price) || 0
     }));
 
-    if (!order.totalAmount) {
-      order.totalAmount = order.items.reduce((sum, i) => sum + (i.qty * i.price), 0);
-    }
+    // Calculate total amount
+    order.totalAmount = order.items.reduce((sum, i) => sum + i.qty * i.price, 0);
 
     return order;
   });
@@ -66,7 +69,11 @@ function readOrders() {
 
 // Save orders to Excel
 function saveOrders(orders) {
-  const ordersToSave = orders.map(order => ({ ...order, items: JSON.stringify(order.items) }));
+  const ordersToSave = orders.map(order => ({
+    ...order,
+    items: JSON.stringify(order.items)
+  }));
+
   const workbook = XLSX.utils.book_new();
   const worksheet = XLSX.utils.json_to_sheet(ordersToSave);
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders');
@@ -82,7 +89,6 @@ function appendOrder(order) {
 
 /* ------------------- Routes ------------------- */
 
-// Health check
 app.get('/', (req, res) => res.send('✅ Server running. Visit /admin'));
 
 // Add new order
@@ -141,13 +147,13 @@ io.on('connection', socket => {
   socket.emit('all-orders', readOrders());
 });
 
-/* ------------------- Auto-fix old orders ------------------- */
+/* ------------------- Fix old orders ------------------- */
 (function fixOldOrders() {
   const orders = readOrders();
   let updated = false;
 
   orders.forEach(order => {
-    if (!order['Tracking ID'] || order['Tracking ID'] === 'undefined' || order['Tracking ID'] === '') {
+    if (!order['Tracking ID'] || order['Tracking ID'] === 'undefined') {
       order['Tracking ID'] = generateTrackingID();
       updated = true;
     }
