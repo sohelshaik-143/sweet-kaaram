@@ -24,7 +24,6 @@
 </header>
 
 <main class="container mx-auto my-10 px-4">
-  <!-- Top Controls -->
   <div class="flex flex-wrap gap-3 justify-between items-center mb-6">
     <a href="/download-excel" class="bg-green-600 text-white px-5 py-3 rounded-lg text-lg font-semibold hover:bg-green-700 transition shadow-lg">
        ⬇ Download Excel
@@ -35,7 +34,6 @@
     </button>
   </div>
 
-  <!-- Orders Table -->
   <div id="ordersTable" class="overflow-x-auto bg-white rounded shadow">
     <table class="min-w-full table-auto">
       <thead class="bg-red-700 text-white">
@@ -56,7 +54,6 @@
     </table>
   </div>
 
-  <!-- Add Order Form -->
   <div class="my-8 p-4 bg-white rounded shadow">
     <h2 class="text-xl font-bold mb-4">➕ Add New Order</h2>
     <form id="addOrderForm" class="flex flex-col gap-3">
@@ -72,7 +69,7 @@
 const tbody = document.getElementById('ordersBody');
 let currentOrders = [];
 
-// Safe parse items
+// Parse items safely
 function parseItems(order) {
   if (!order.items) return [];
   if (typeof order.items === 'string') {
@@ -81,7 +78,7 @@ function parseItems(order) {
   return Array.isArray(order.items) ? order.items : [];
 }
 
-// Render orders
+// Render all orders
 function renderOrders(newOrderId = null) {
   tbody.innerHTML = '';
   currentOrders.slice().reverse().forEach((order, index) => {
@@ -90,7 +87,7 @@ function renderOrders(newOrderId = null) {
     if (order['Tracking ID'] === newOrderId) tr.classList.add('new-order');
 
     const items = parseItems(order);
-    const itemsList = items.length ? items.map(i => `${i.name} (${i.qty} x ₹${i.price})`).join(', ') : '-';
+    const itemsList = items.length ? items.map(i => `${i.name || 'Unnamed'} (${i.qty || 1} x ₹${i.price || 0})`).join(', ') : '-';
     const qtyTotal = items.reduce((sum, i) => sum + (i.qty || 0), 0);
     const totalAmount = order.totalAmount ?? items.reduce((sum, i) => sum + ((i.qty||0)*(i.price||0)), 0);
 
@@ -135,10 +132,7 @@ async function updateStatus(trackingId, newStatus) {
     const data = await res.json();
     if (!data.success) throw new Error(data.error || 'Failed');
     const index = currentOrders.findIndex(o => o['Tracking ID'] === trackingId);
-    if (index > -1) {
-      currentOrders[index]['Order Status'] = newStatus;
-      renderOrders(trackingId);
-    }
+    if (index > -1) { currentOrders[index]['Order Status'] = newStatus; renderOrders(trackingId); }
   } catch(err) { console.error(err); alert('❌ Failed to update status'); }
 }
 
@@ -150,7 +144,7 @@ socket.on('new-order', order => { currentOrders.push(order); renderOrders(order[
 // Fetch fallback
 async function fetchOrders() {
   try { const res = await fetch('/api/orders'); currentOrders = await res.json(); renderOrders(); }
-  catch(err){console.error(err);}
+  catch(err){ console.error(err); }
 }
 fetchOrders();
 
@@ -160,9 +154,11 @@ document.getElementById('addOrderForm').addEventListener('submit', async e => {
   const name = document.getElementById('name').value.trim();
   const phone = document.getElementById('phone').value.trim();
   let items = [];
-  try { items = JSON.parse(document.getElementById('items').value); }
-  catch { alert('❌ Invalid items JSON'); return; }
+  try { items = JSON.parse(document.getElementById('items').value); } catch { alert('❌ Invalid items JSON'); return; }
   if (!name || !phone || !items.length) { alert('⚠ Fill all fields'); return; }
+
+  // Normalize items
+  items = items.map(i => ({ name: i.name||'Unnamed', qty: Number(i.qty)||1, price: Number(i.price)||0 }));
 
   try {
     const res = await fetch('/order', {
