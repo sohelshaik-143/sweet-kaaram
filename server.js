@@ -1,8 +1,8 @@
+// server.js
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const XLSX = require('xlsx');
-
 const http = require('http');
 const { Server } = require('socket.io');
 
@@ -17,26 +17,24 @@ const excelPath = path.join(__dirname, EXCEL_FILE);
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Generate Tracking ID
+// Generate Unique Tracking ID
 function generateTrackingID() {
   return 'SK' + Date.now().toString().slice(-6) + Math.floor(Math.random() * 9000 + 1000);
 }
 
-// ✅ Read orders from Excel
+// ✅ Read Orders from Excel
 function readOrders() {
   if (!fs.existsSync(excelPath)) return [];
 
   const workbook = XLSX.readFile(excelPath);
-  const sheetName = workbook.SheetNames.includes('Orders')
-    ? 'Orders'
-    : workbook.SheetNames[0];
-
+  const sheetName = workbook.SheetNames.includes('Orders') ? 'Orders' : workbook.SheetNames[0];
   const worksheet = workbook.Sheets[sheetName];
   if (!worksheet) return [];
 
   const data = XLSX.utils.sheet_to_json(worksheet);
 
   return data.map(order => {
+    // Parse items
     order.items = order.items ? JSON.parse(order.items) : [];
 
     order.items = order.items.map(i => ({
@@ -45,16 +43,21 @@ function readOrders() {
       price: Number(i.price) || 0
     }));
 
+    // Calculate totals
     order.totalAmount = order.items.reduce((sum, i) => sum + (i.qty * i.price), 0);
     order['Order Status'] = order['Order Status'] || 'Pending';
     order.createdAt = order.createdAt || new Date().toISOString();
-    order['Tracking ID'] = order['Tracking ID'] || generateTrackingID();
+
+    // ✅ Always ensure tracking ID exists
+    if (!order['Tracking ID'] || order['Tracking ID'].trim() === '') {
+      order['Tracking ID'] = generateTrackingID();
+    }
 
     return order;
   });
 }
 
-// ✅ Save orders back to Excel
+// ✅ Save Orders to Excel
 function saveOrders(orders) {
   const formatted = orders.map(o => ({
     ...o,
@@ -67,7 +70,7 @@ function saveOrders(orders) {
   XLSX.writeFile(wb, excelPath);
 }
 
-// ✅ Add new order
+// ✅ Append a new order
 function appendOrder(order) {
   const orders = readOrders();
   orders.push(order);
@@ -80,6 +83,7 @@ app.get('/', (req, res) => res.send('✅ Server running. Visit /admin for dashbo
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public/admin.html')));
 app.get('/api/orders', (req, res) => res.json(readOrders()));
 
+// ✅ Create a new order
 app.post('/order', (req, res) => {
   const { name, phone, items } = req.body;
 
@@ -103,6 +107,7 @@ app.post('/order', (req, res) => {
   res.json({ success: true, orderId: newOrder['Tracking ID'] });
 });
 
+// ✅ Update order status
 app.post('/update-status', (req, res) => {
   const { trackingId, newStatus } = req.body;
   if (!trackingId || !newStatus) {
@@ -121,15 +126,17 @@ app.post('/update-status', (req, res) => {
   res.json({ success: true });
 });
 
+// ✅ Download Excel file
 app.get('/download-excel', (req, res) => {
-  if (!fs.existsSync(excelPath)) return res.status(404).send('Excel not found');
+  if (!fs.existsSync(excelPath)) return res.status(404).send('Excel file not found');
   res.download(excelPath, 'orders.xlsx');
 });
 
-// SOCKET
+// SOCKET.IO
 io.on('connection', socket => {
+  console.log('🟢 Client connected');
   socket.emit('all-orders', readOrders());
 });
 
-// START
+// ✅ START SERVER
 server.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
