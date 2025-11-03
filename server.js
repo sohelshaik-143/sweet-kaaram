@@ -17,9 +17,11 @@ const excelPath = path.join(__dirname, EXCEL_FILE);
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Generate Unique Tracking ID
+// ✅ Generate Unique Tracking ID (Improved)
 function generateTrackingID() {
-  return 'SK' + Date.now().toString().slice(-6) + Math.floor(Math.random() * 9000 + 1000);
+  const timestamp = Date.now().toString(36).toUpperCase(); // short + unique
+  const random = Math.floor(Math.random() * 9000 + 1000);  // random 4-digit number
+  return `SK-${timestamp}-${random}`;
 }
 
 // ✅ Read Orders from Excel
@@ -27,14 +29,16 @@ function readOrders() {
   if (!fs.existsSync(excelPath)) return [];
 
   const workbook = XLSX.readFile(excelPath);
-  const sheetName = workbook.SheetNames.includes('Orders') ? 'Orders' : workbook.SheetNames[0];
+  const sheetName = workbook.SheetNames.includes('Orders')
+    ? 'Orders'
+    : workbook.SheetNames[0];
   const worksheet = workbook.Sheets[sheetName];
   if (!worksheet) return [];
 
   const data = XLSX.utils.sheet_to_json(worksheet);
 
   return data.map(order => {
-    // Parse items
+    // Parse items safely
     order.items = order.items ? JSON.parse(order.items) : [];
 
     order.items = order.items.map(i => ({
@@ -48,7 +52,7 @@ function readOrders() {
     order['Order Status'] = order['Order Status'] || 'Pending';
     order.createdAt = order.createdAt || new Date().toISOString();
 
-    // ✅ Always ensure tracking ID exists
+    // ✅ Ensure tracking ID exists
     if (!order['Tracking ID'] || order['Tracking ID'].trim() === '') {
       order['Tracking ID'] = generateTrackingID();
     }
@@ -57,15 +61,20 @@ function readOrders() {
   });
 }
 
-// ✅ Save Orders to Excel
+// ✅ Save Orders to Excel (Safe Write)
 function saveOrders(orders) {
+  // Ensure all orders have tracking IDs
+  orders.forEach(o => {
+    if (!o['Tracking ID']) o['Tracking ID'] = generateTrackingID();
+  });
+
   const formatted = orders.map(o => ({
     ...o,
     items: JSON.stringify(o.items)
   }));
 
   const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.json_to_sheet(formatted);
+  const ws = XLSX.utils.json_to_sheet(formatted, { skipHeader: false });
   XLSX.utils.book_append_sheet(wb, ws, 'Orders');
   XLSX.writeFile(wb, excelPath);
 }
@@ -78,9 +87,10 @@ function appendOrder(order) {
 }
 
 // ROUTES
-
 app.get('/', (req, res) => res.send('✅ Server running. Visit /admin for dashboard.'));
-app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public/admin.html')));
+app.get('/admin', (req, res) =>
+  res.sendFile(path.join(__dirname, 'public/admin.html'))
+);
 app.get('/api/orders', (req, res) => res.json(readOrders()));
 
 // ✅ Create a new order
@@ -136,6 +146,8 @@ app.get('/download-excel', (req, res) => {
 io.on('connection', socket => {
   console.log('🟢 Client connected');
   socket.emit('all-orders', readOrders());
+
+  socket.on('disconnect', () => console.log('🔴 Client disconnected'));
 });
 
 // ✅ START SERVER
