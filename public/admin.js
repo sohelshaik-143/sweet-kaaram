@@ -10,7 +10,7 @@ function renderOrders(newOrderId = null) {
     tr.className = 'border-b text-center hover:bg-gray-50';
 
     // Ensure Tracking ID exists
-    const trackingId = order['Tracking ID'] ?? order.trackingId ?? 'UNKNOWN';
+    const trackingId = order['Tracking ID'] ?? order.trackingId ?? 'GST+date.now()';
     if (trackingId === newOrderId) tr.classList.add('new-order');
 
     // Parse items safely
@@ -22,7 +22,7 @@ function renderOrders(newOrderId = null) {
     }
 
     const itemsList = items.length
-      ? items.map(i => `${i.name || 'Unnamed'} (${i.qty || 1} x ₹${i.price || 0})`).join(', ')
+      ? items.map(i => `${i.name || 'items'} (${i.qty || 1} x ₹${i.price || 0})`).join(', ')
       : '-';
 
     const qtyTotal = items.reduce((sum, i) => sum + (Number(i.qty) || 0), 0);
@@ -143,7 +143,7 @@ document.getElementById('addOrderForm').addEventListener('submit', async e => {
     });
     const data = await res.json();
     if (data.success) {
-      alert(`✅ Order Placed! Tracking ID: ${data.orderId ?? 'SK'+Date.now()}`);
+      alert(`✅ Order Placed! Tracking ID: ${data.orderId ?? 'GST'+Date.now()}`);
       document.getElementById('addOrderForm').reset();
     } else { alert('❌ Failed to place order'); }
   } catch (err) {
