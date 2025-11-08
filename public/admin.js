@@ -9,26 +9,39 @@ function renderOrders(newOrderId = null) {
     const tr = document.createElement('tr');
     tr.className = 'border-b text-center hover:bg-gray-50';
 
-    // Ensure Tracking ID exists
-    const trackingId = order['Tracking ID'] ?? order.trackingId ?? 'GST+date.now()';
+    // ✅ Always normalize trackingId
+    const trackingId =
+      order.trackingId ||
+      order['Tracking ID'] ||
+      order.orderId ||
+      `TID${Date.now()}`;
     if (trackingId === newOrderId) tr.classList.add('new-order');
 
-    // Parse items safely
+    // ✅ Parse items properly (string OR array)
     let items = [];
-    if (typeof order.items === 'string') {
-      try { items = JSON.parse(order.items); } catch { items = []; }
-    } else if (Array.isArray(order.items)) {
-      items = order.items;
+    try {
+      if (typeof order.items === 'string') {
+        items = JSON.parse(order.items);
+      } else if (Array.isArray(order.items)) {
+        items = order.items;
+      }
+    } catch (err) {
+      console.error('❌ Failed to parse items for order:', trackingId, err);
+      items = [];
     }
 
+    if (!Array.isArray(items)) items = [];
+
     const itemsList = items.length
-      ? items.map(i => `${i.name || 'items'} (${i.qty || 1} x ₹${i.price || 0})`).join(', ')
+      ? items.map(i => `${i?.name || 'Item'} (${i?.qty || 1} × ₹${i?.price || 0})`).join(', ')
       : '-';
 
     const qtyTotal = items.reduce((sum, i) => sum + (Number(i.qty) || 0), 0);
-    const totalAmount = order.totalAmount ?? items.reduce((sum, i) => sum + ((i.qty || 0) * (i.price || 0)), 0);
+    const totalAmount =
+      order.totalAmount ??
+      items.reduce((sum, i) => sum + ((i.qty || 0) * (i.price || 0)), 0);
 
-    const status = order['Order Status'] || 'Pending';
+    const status = order['Order Status'] || order.orderStatus || 'Pending';
     const statusColor =
       status.toLowerCase() === 'delivered'
         ? 'text-green-600'
@@ -36,7 +49,9 @@ function renderOrders(newOrderId = null) {
         ? 'text-blue-600'
         : 'text-yellow-600';
 
-    const dateDisplay = order.createdAt ? new Date(order.createdAt).toLocaleString() : '-';
+    const dateDisplay = order.createdAt
+      ? new Date(order.createdAt).toLocaleString()
+      : '-';
 
     let actionBtn = '';
     if (status.toLowerCase() === 'pending') {
@@ -74,7 +89,12 @@ async function updateStatus(trackingId, newStatus) {
     const data = await res.json();
     if (!data.success) throw new Error(data.error || 'Failed');
 
-    const index = currentOrders.findIndex(o => (o['Tracking ID'] ?? o.trackingId) === trackingId);
+    const index = currentOrders.findIndex(
+      o =>
+        o.trackingId === trackingId ||
+        o['Tracking ID'] === trackingId ||
+        o.orderId === trackingId
+    );
     if (index > -1) {
       currentOrders[index]['Order Status'] = newStatus;
       renderOrders(trackingId);
@@ -87,12 +107,20 @@ async function updateStatus(trackingId, newStatus) {
 
 /* ---------------- Socket.IO ---------------- */
 const socket = io();
-socket.on('all-orders', orders => { currentOrders = orders; renderOrders(); });
+
+socket.on('all-orders', orders => {
+  currentOrders = orders.map(o => ({
+    ...o,
+    trackingId: o.trackingId || o['Tracking ID'] || o.orderId || `TID${Date.now()}`
+  }));
+  renderOrders();
+});
+
 socket.on('new-order', order => {
-  // Ensure tracking ID exists
-  if (!order['Tracking ID']) order['Tracking ID'] = order.trackingId ?? `SK${Date.now()}`;
+  if (!order.trackingId)
+    order.trackingId = order['Tracking ID'] ?? `TID${Date.now()}`;
   currentOrders.push(order);
-  renderOrders(order['Tracking ID']);
+  renderOrders(order.trackingId);
 });
 
 /* ---------------- Fetch fallback ---------------- */
@@ -100,12 +128,14 @@ async function fetchOrders() {
   try {
     const res = await fetch('/api/orders');
     currentOrders = await res.json();
-    // Fix missing tracking IDs
     currentOrders.forEach(o => {
-      if (!o['Tracking ID']) o['Tracking ID'] = o.trackingId ?? `SK${Date.now()}`;
+      if (!o.trackingId)
+        o.trackingId = o['Tracking ID'] ?? `TID${Date.now()}`;
     });
     renderOrders();
-  } catch (err) { console.error(err); }
+  } catch (err) {
+    console.error(err);
+  }
 }
 fetchOrders();
 
@@ -123,12 +153,13 @@ document.getElementById('addOrderForm').addEventListener('submit', async e => {
   }
 
   let items = [];
-  try { items = JSON.parse(itemsInput); } catch {
-    alert('❌ Invalid items JSON');
+  try {
+    items = JSON.parse(itemsInput);
+  } catch {
+    alert('❌ Invalid items JSON format');
     return;
   }
 
-  // Validate items
   items = items.map(i => ({
     name: i.name || 'Unnamed',
     qty: Number(i.qty) || 1,
@@ -143,9 +174,11 @@ document.getElementById('addOrderForm').addEventListener('submit', async e => {
     });
     const data = await res.json();
     if (data.success) {
-      alert(`✅ Order Placed! Tracking ID: ${data.orderId ?? 'GST'+Date.now()}`);
+      alert(`✅ Order Placed! Tracking ID: ${data.orderId}`);
       document.getElementById('addOrderForm').reset();
-    } else { alert('❌ Failed to place order'); }
+    } else {
+      alert('❌ Failed to place order');
+    }
   } catch (err) {
     console.error(err);
     alert('❌ Server error');
