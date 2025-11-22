@@ -99,22 +99,31 @@ app.post("/order", (req, res) => {
 
   const trackingId = generateTrackingID();
 
-  const newOrder = {
-    name,
-    phone,
-    items: items.map(i => ({
-      name: i.name || "Unnamed Item",
-      qty: Number(i.qty) || 1,
-      price: Number(i.price) || 0
-    })),
-    totalAmount: items.reduce(
-      (sum, i) => sum + (Number(i.qty) || 0) * (Number(i.price) || 0),
-      0
-    ),
-    "Tracking ID": trackingId,
-    "Order Status": "Pending",
-    createdAt: new Date().toISOString()
-  };
+  const menuNames = {
+  "cp100": "Chicken Pickle (100 g)",
+  "cp250": "Chicken Pickle (250 g)",
+  "gulab": "Gulabjamun (Box of 6)",
+  "nuvvula": "Black Nuvvula Laddu (Box of 6)",
+  "murukulu": "Murukulu 150 g"
+};
+
+const newOrder = {
+  name,
+  phone,
+  items: items.map(i => ({
+    name: menuNames[i.id] || i.name || "Unnamed Item",
+    qty: Number(i.qty) || 1,
+    price: Number(i.price) || 0
+  })),
+  totalAmount: items.reduce(
+    (sum, i) => sum + (Number(i.qty) || 0) * (Number(i.price) || 0),
+    0
+  ),
+  "Tracking ID": trackingId,
+  "Order Status": "Pending",
+  createdAt: new Date().toISOString()
+};
+
 
   appendOrder(newOrder);
 
