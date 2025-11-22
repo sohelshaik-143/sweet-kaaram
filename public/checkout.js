@@ -2,7 +2,7 @@
 //    CHECKOUT PAGE SCRIPT
 // ==========================
 
-// Get items from menu
+// Collect items from menu cards
 function getSelectedItems() {
   const items = [];
 
@@ -24,7 +24,6 @@ function getSelectedItems() {
   return items;
 }
 
-// Place Order
 document.getElementById("orderForm").addEventListener("submit", async e => {
   e.preventDefault();
 
@@ -35,7 +34,7 @@ document.getElementById("orderForm").addEventListener("submit", async e => {
   const items = getSelectedItems();
 
   if (items.length === 0) {
-    alert("⚠ Please select at least one item");
+    alert("⚠ Please select at least one item!");
     return;
   }
 
@@ -46,10 +45,11 @@ document.getElementById("orderForm").addEventListener("submit", async e => {
   });
 
   const data = await res.json();
+
   if (data.success) {
     document.getElementById("successBox").innerHTML =
-      `✅ Order Placed! Tracking ID: ${data.orderId}`;
+      `✅ Order Placed Successfully! <br> Tracking ID: <b>${data.orderId}</b>`;
   } else {
-    alert("❌ Failed to place order");
+    alert("❌ Error placing order!");
   }
 });

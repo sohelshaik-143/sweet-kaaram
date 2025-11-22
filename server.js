@@ -124,20 +124,33 @@ app.post("/order", (req, res) => {
 });
 
 // ------------ UPDATE STATUS ------------
-app.post("/update-status", (req, res) => {
-  const { trackingId, newStatus } = req.body;
+app.post("/order", (req, res) => {
+  const { name, phone, address, items } = req.body;
 
-  const orders = readOrders();
-  const order = orders.find(o => o["Tracking ID"] === trackingId);
+  if (!name || !phone || !Array.isArray(items)) {
+    return res.json({ success: false, error: "Invalid order data" });
+  }
 
-  if (!order) return res.status(404).json({ success: false, error: "Not found" });
+  const trackingId = generateTrackingID();
 
-  order["Order Status"] = newStatus;
-  saveOrders(orders);
+  const newOrder = {
+    name,
+    phone,
+    address,
+    items,
+    totalAmount: items.reduce((sum, i) => sum + i.qty * i.price, 0),
+    "Tracking ID": trackingId,
+    "Order Status": "Pending",
+    createdAt: new Date().toISOString()
+  };
 
-  io.emit("all-orders", orders);
-  res.json({ success: true });
+  appendOrder(newOrder);
+
+  io.emit("new-order", newOrder);
+
+  res.json({ success: true, orderId: trackingId });
 });
+
 
 // ------------ DOWNLOAD EXCEL ------------
 app.get("/download-excel", (req, res) => {
