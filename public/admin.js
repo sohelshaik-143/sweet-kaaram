@@ -17,28 +17,25 @@ function renderOrders() {
       order.orderId ||
       "TID" + Date.now();
 
-    // Parse items
+    // Parse items safely
     let items = [];
+    try {
+      if (Array.isArray(order.items)) {
+        items = order.items;
+      } else if (typeof order.items === "string") {
+        items = JSON.parse(order.items);
+      }
+    } catch {
+      items = [];
+    }
 
-try {
-  if (Array.isArray(order.items)) {
-    items = order.items;
-  } else if (typeof order.items === 'string') {
-    items = JSON.parse(order.items);
-  }
-} catch {
-  items = [];
-}
-
-const itemsList = items.length
-  ? items.map(i => `${i.name} (${i.qty} × ₹${i.price})`).join(", ")
-  : "-";
-
+    const itemsList = items.length
+      ? items.map(i => `${i.name} (${i.qty} × ₹${i.price})`).join(", ")
+      : "-";
 
     const qtyTotal = items.reduce((a, b) => a + Number(b.qty), 0);
 
     const status = order["Order Status"] || "Pending";
-
     const date = new Date(order.createdAt).toLocaleString();
 
     let btn = "";
@@ -69,24 +66,37 @@ const itemsList = items.length
 
 // ---------------- Update Status ----------------
 async function updateStatus(trackingId, newStatus) {
-  const res = await fetch("/update-status", {
+  const res = await fetch("https://sweet-kaaram.onrender.com/update-status", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ trackingId, newStatus })
   });
 
   const data = await res.json();
+
   if (data.success) {
+
     currentOrders = currentOrders.map(o => {
-      if (o["Tracking ID"] === trackingId) o["Order Status"] = newStatus;
+      const tid =
+        o["Tracking ID"] ||
+        o.trackingId ||
+        o.orderId;
+
+      if (tid === trackingId) {
+        o["Order Status"] = newStatus;
+      }
+
       return o;
     });
+
     renderOrders();
+  } else {
+    alert("❌ Failed to update status");
   }
 }
 
 // ---------------- Socket.IO ----------------
-const socket = io();
+const socket = io("https://sweet-kaaram.onrender.com");
 
 socket.on("all-orders", orders => {
   currentOrders = orders;
@@ -100,8 +110,9 @@ socket.on("new-order", order => {
 
 // ---------------- Fetch fallback ----------------
 async function fetchOrders() {
-  const res = await fetch("/api/orders");
+  const res = await fetch("https://sweet-kaaram.onrender.com/api/orders");
   currentOrders = await res.json();
   renderOrders();
 }
+
 fetchOrders();
