@@ -38,7 +38,6 @@ ensureExcel();
 // ------------------ Read Orders ------------------
 function readOrders() {
   ensureExcel();
-
   const workbook = XLSX.readFile(excelPath);
   const sheet = workbook.Sheets["Orders"];
   if (!sheet) return [];
@@ -46,7 +45,6 @@ function readOrders() {
   const data = XLSX.utils.sheet_to_json(sheet);
 
   return data.map(order => {
-    // Fix items parsing
     try {
       order.items =
         typeof order.items === "string"
@@ -58,13 +56,11 @@ function readOrders() {
       order.items = [];
     }
 
-    // Calculate total amount safely
     order.totalAmount = order.items.reduce(
       (sum, i) => sum + (Number(i.qty || 0) * Number(i.price || 0)),
       0
     );
 
-    // DO NOT regenerate tracking IDs here ❌
     order["Order Status"] = order["Order Status"] || "Pending";
 
     return order;
@@ -197,6 +193,25 @@ app.post("/clear-orders", (req, res) => {
   } catch (err) {
     res.json({ success: false, error: "Failed to clear orders" });
   }
+});
+
+// ------------ TRACK ORDER (NO AUTO REFRESH) ------------
+app.get("/track/:trackingId", (req, res) => {
+  const trackingId = req.params.trackingId;
+  const orders = readOrders();
+
+  const order = orders.find(
+    o =>
+      o["Tracking ID"] === trackingId ||
+      o.trackingId === trackingId ||
+      o.orderId === trackingId
+  );
+
+  if (!order) {
+    return res.status(404).json({ success: false, error: "Invalid Tracking ID" });
+  }
+
+  res.json({ success: true, order });
 });
 
 // ------------ SOCKET.IO ------------
