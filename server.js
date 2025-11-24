@@ -24,9 +24,20 @@ function generateTrackingID() {
   return "TID" + Date.now() + Math.floor(Math.random() * 9000 + 1000);
 }
 
+// ------------------ Initialize Excel If Missing ------------------
+function ensureExcel() {
+  if (!fs.existsSync(excelPath)) {
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet([]);
+    XLSX.utils.book_append_sheet(wb, ws, "Orders");
+    XLSX.writeFile(wb, excelPath);
+  }
+}
+ensureExcel();
+
 // ------------------ Read Orders ------------------
 function readOrders() {
-  if (!fs.existsSync(excelPath)) return [];
+  ensureExcel();
 
   const workbook = XLSX.readFile(excelPath);
   const sheet = workbook.Sheets["Orders"];
@@ -35,22 +46,26 @@ function readOrders() {
   const data = XLSX.utils.sheet_to_json(sheet);
 
   return data.map(order => {
+    // Fix items parsing
     try {
       order.items =
         typeof order.items === "string"
           ? JSON.parse(order.items)
-          : order.items || [];
+          : Array.isArray(order.items)
+          ? order.items
+          : [];
     } catch {
       order.items = [];
     }
 
+    // Calculate total amount safely
     order.totalAmount = order.items.reduce(
-      (sum, i) => sum + (Number(i.qty) || 0) * (Number(i.price) || 0),
+      (sum, i) => sum + (Number(i.qty || 0) * Number(i.price || 0)),
       0
     );
 
+    // DO NOT regenerate tracking IDs here ❌
     order["Order Status"] = order["Order Status"] || "Pending";
-    order["Tracking ID"] = order["Tracking ID"] || generateTrackingID();
 
     return order;
   });
@@ -85,11 +100,12 @@ app.get("/admin", (req, res) =>
   res.sendFile(path.join(__dirname, "public/admin.html"))
 );
 
+// ------------ READ ORDERS ------------
 app.get("/api/orders", (req, res) => {
   res.json(readOrders());
 });
 
-// ------------ CREATE ORDER (ONE ROUTE) ------------
+// ------------ CREATE ORDER ------------
 app.post("/order", (req, res) => {
   const { name, phone, items } = req.body;
 
@@ -107,16 +123,18 @@ app.post("/order", (req, res) => {
     murukulu: "Murukulu 150 g"
   };
 
+  const cleanedItems = items.map(i => ({
+    name: menuNames[i.id] || i.name || "Unnamed Item",
+    qty: Number(i.qty) || 1,
+    price: Number(i.price) || 0
+  }));
+
   const newOrder = {
     name,
     phone,
-    items: items.map(i => ({
-      name: menuNames[i.id] || i.name || "Unnamed Item",
-      qty: Number(i.qty) || 1,
-      price: Number(i.price) || 0
-    })),
-    totalAmount: items.reduce(
-      (sum, i) => sum + (Number(i.qty) || 0) * (Number(i.price) || 0),
+    items: cleanedItems,
+    totalAmount: cleanedItems.reduce(
+      (sum, i) => sum + i.qty * i.price,
       0
     ),
     "Tracking ID": trackingId,
@@ -157,7 +175,7 @@ app.post("/update-status", (req, res) => {
   saveOrders(orders);
   io.emit("all-orders", orders);
 
-  return res.json({ success: true });
+  res.json({ success: true });
 });
 
 // ------------ DOWNLOAD EXCEL ------------
@@ -165,13 +183,9 @@ app.get("/download-excel", (req, res) => {
   res.download(excelPath, "orders.xlsx");
 });
 
-// ------------ CLEAR ALL ORDERS ✔️ NEW FEATURE ------------
+// ------------ CLEAR ORDERS (SAFE) ------------
 app.post("/clear-orders", (req, res) => {
   try {
-    if (fs.existsSync(excelPath)) {
-      fs.unlinkSync(excelPath);
-    }
-
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet([]);
     XLSX.utils.book_append_sheet(wb, ws, "Orders");
