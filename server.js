@@ -35,11 +35,11 @@ function readOrders() {
   const data = XLSX.utils.sheet_to_json(sheet);
 
   return data.map(order => {
-    // Parse items
     try {
-      order.items = typeof order.items === "string"
-        ? JSON.parse(order.items)
-        : order.items || [];
+      order.items =
+        typeof order.items === "string"
+          ? JSON.parse(order.items)
+          : order.items || [];
     } catch {
       order.items = [];
     }
@@ -89,7 +89,7 @@ app.get("/api/orders", (req, res) => {
   res.json(readOrders());
 });
 
-// ------------ CREATE ORDER (ONLY ONE ROUTE) ------------
+// ------------ CREATE ORDER (ONE ROUTE) ------------
 app.post("/order", (req, res) => {
   const { name, phone, items } = req.body;
 
@@ -100,11 +100,11 @@ app.post("/order", (req, res) => {
   const trackingId = generateTrackingID();
 
   const menuNames = {
-    "cp100": "Chicken Pickle (100 g)",
-    "cp250": "Chicken Pickle (250 g)",
-    "gulab": "Gulabjamun (Box of 6)",
-    "nuvvula": "Black Nuvvula Laddu (Box of 6)",
-    "murukulu": "Murukulu 150 g"
+    cp100: "Chicken Pickle (100 g)",
+    cp250: "Chicken Pickle (250 g)",
+    gulab: "Gulabjamun (Box of 6)",
+    nuvvula: "Black Nuvvula Laddu (Box of 6)",
+    murukulu: "Murukulu 150 g"
   };
 
   const newOrder = {
@@ -131,7 +131,7 @@ app.post("/order", (req, res) => {
   res.json({ success: true, orderId: trackingId });
 });
 
-// ------------ UPDATE STATUS ✔️ FIXED ✔️ ------------
+// ------------ UPDATE STATUS ------------
 app.post("/update-status", (req, res) => {
   const { trackingId, newStatus } = req.body;
 
@@ -143,9 +143,7 @@ app.post("/update-status", (req, res) => {
   let updated = false;
 
   orders = orders.map(o => {
-    const tid = o["Tracking ID"];
-
-    if (tid === trackingId) {
+    if (o["Tracking ID"] === trackingId) {
       o["Order Status"] = newStatus;
       updated = true;
     }
@@ -157,7 +155,6 @@ app.post("/update-status", (req, res) => {
   }
 
   saveOrders(orders);
-
   io.emit("all-orders", orders);
 
   return res.json({ success: true });
@@ -166,6 +163,26 @@ app.post("/update-status", (req, res) => {
 // ------------ DOWNLOAD EXCEL ------------
 app.get("/download-excel", (req, res) => {
   res.download(excelPath, "orders.xlsx");
+});
+
+// ------------ CLEAR ALL ORDERS ✔️ NEW FEATURE ------------
+app.post("/clear-orders", (req, res) => {
+  try {
+    if (fs.existsSync(excelPath)) {
+      fs.unlinkSync(excelPath);
+    }
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet([]);
+    XLSX.utils.book_append_sheet(wb, ws, "Orders");
+    XLSX.writeFile(wb, excelPath);
+
+    io.emit("all-orders", []);
+
+    res.json({ success: true, message: "All orders cleared successfully" });
+  } catch (err) {
+    res.json({ success: false, error: "Failed to clear orders" });
+  }
 });
 
 // ------------ SOCKET.IO ------------
