@@ -48,7 +48,7 @@ function loadHistory() {
     }
 
     order.totalAmount = order.items.reduce(
-      (sum, i) => sum + i.qty * i.price,
+      (sum, i) => sum + (Number(i.qty) || 0) * (Number(i.price) || 0),
       0
     );
 
@@ -67,7 +67,6 @@ function saveHistory(orders) {
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.json_to_sheet(formatted);
   XLSX.utils.book_append_sheet(wb, ws, "Orders");
-
   XLSX.writeFile(wb, excelPath);
 }
 
@@ -111,8 +110,8 @@ app.post("/order", (req, res) => {
   res.json({ success: true, trackingId });
 });
 
-// ------------------ Order Tracking API ------------------
-app.get("/track/:id", (req, res) => {
+// ------------------ User Order Tracking ------------------
+app.get("/api/track/:id", (req, res) => {
   const id = req.params.id;
   const history = loadHistory();
 
@@ -125,13 +124,13 @@ app.get("/track/:id", (req, res) => {
   res.json({ success: true, order });
 });
 
-// ------------------ ADMIN: Get All Orders ------------------
+// ------------------ Admin: Get All Orders ------------------
 app.get("/api/orders", (req, res) => {
   res.json(loadHistory());
 });
 
-// ------------------ ADMIN: Update Status ------------------
-app.post("/update-status", (req, res) => {
+// ------------------ Admin: Update Status ------------------
+app.post("/api/update-status", (req, res) => {
   const { trackingId, newStatus } = req.body;
 
   const history = loadHistory();
@@ -146,16 +145,6 @@ app.post("/update-status", (req, res) => {
 
   io.emit("all-orders", history);
 
-  res.json({ success: true });
-});
-
-// ------------------ Clear Orders (Admin Only) ------------------
-app.post("/clear-orders", (req, res) => {
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.json_to_sheet([]);
-  XLSX.utils.book_append_sheet(wb, ws, "Orders");
-  XLSX.writeFile(wb, excelPath);
-  io.emit("all-orders", []);
   res.json({ success: true });
 });
 
