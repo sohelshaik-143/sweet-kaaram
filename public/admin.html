@@ -171,6 +171,30 @@ document.getElementById('addOrderForm').addEventListener('submit', async e => {
     else alert('❌ Failed to place order');
   } catch(err){ console.error(err); alert('❌ Server error'); }
 });
+async function clearOrders() {
+  if (!confirm("⚠️ Are you sure? This will delete ALL orders permanently!")) return;
+
+  try {
+    const res = await fetch("/clear-orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" }
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      alert("🧹 All orders cleared!");
+      currentOrders = [];
+      renderOrders();
+    } else {
+      alert("❌ Failed to clear orders");
+    }
+  } catch (err) {
+    console.error(err);
+    alert("❌ Server error");
+  }
+}
+
 </script>
 </body>
 </html>
