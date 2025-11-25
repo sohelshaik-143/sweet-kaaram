@@ -19,6 +19,11 @@ const excelPath = path.join(__dirname, EXCEL_FILE);
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
+// ------------------ Serve Admin Page ------------------
+app.get("/admin", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "admin.html"));
+});
+
 // ------------------ Create Excel If Missing ------------------
 function ensureExcel() {
   if (!fs.existsSync(excelPath)) {
@@ -30,7 +35,7 @@ function ensureExcel() {
 }
 ensureExcel();
 
-// ------------------ Load Orders (Full History) ------------------
+// ------------------ Load Orders ------------------
 function loadHistory() {
   ensureExcel();
   const workbook = XLSX.readFile(excelPath);
@@ -42,9 +47,7 @@ function loadHistory() {
       order.items =
         typeof order.items === "string"
           ? JSON.parse(order.items)
-          : Array.isArray(order.items)
-          ? order.items
-          : [];
+          : Array.isArray(order.items) ? order.items : [];
     } catch {
       order.items = [];
     }
@@ -113,7 +116,7 @@ app.post("/order", (req, res) => {
   res.json({ success: true, orderId: trackingId });
 });
 
-// ------------------ Order Tracking API ------------------
+// ------------------ Tracking API ------------------
 app.get("/track/:id", (req, res) => {
   const id = req.params.id;
   const history = loadHistory();
@@ -127,12 +130,12 @@ app.get("/track/:id", (req, res) => {
   res.json({ success: true, order });
 });
 
-// ------------------ ADMIN: Get All Orders ------------------
+// ------------------ Get All Orders (Admin) ------------------
 app.get("/api/orders", (req, res) => {
   res.json(loadHistory());
 });
 
-// ------------------ ADMIN: Update Status ------------------
+// ------------------ Update Status (Admin) ------------------
 app.post("/update-status", (req, res) => {
   const { trackingId, newStatus } = req.body;
 
@@ -151,12 +154,13 @@ app.post("/update-status", (req, res) => {
   res.json({ success: true });
 });
 
-// ------------------ Clear Orders (Admin Only) ------------------
+// ------------------ Clear Orders (Admin) ------------------
 app.post("/clear-orders", (req, res) => {
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.json_to_sheet([]);
   XLSX.utils.book_append_sheet(wb, ws, "Orders");
   XLSX.writeFile(wb, excelPath);
+
   io.emit("all-orders", []);
   res.json({ success: true });
 });
