@@ -107,8 +107,8 @@ app.post("/order", (req, res) => {
   saveHistory(history);
 
   io.emit("new-order", newOrder);
+res.json({ success: true, orderId: trackingId });
 
-  res.json({ success: true, trackingId });
 });
 
 // ------------------ Order Tracking API ------------------
@@ -121,8 +121,8 @@ app.get("/track/:id", (req, res) => {
   if (!order) {
     return res.json({ success: false, error: "Order not found" });
   }
+res.json({ success: true, orderId: trackingId });
 
-  res.json({ success: true, order });
 });
 
 // ------------------ ADMIN: Get All Orders ------------------
