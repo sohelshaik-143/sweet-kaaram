@@ -146,7 +146,8 @@ app.post("/update-status", (req, res) => {
 
   io.emit("all-orders", history);
 
-  res.json({ success: true });
+ res.json({ success: true, orderId: trackingId });
+
 });
 
 // ------------------ Clear Orders (Admin Only) ------------------
