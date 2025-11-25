@@ -19,12 +19,7 @@ const excelPath = path.join(__dirname, EXCEL_FILE);
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-// ------------------ Generate Tracking ID ------------------
-function generateTrackingID() {
-  return "TID" + Date.now() + Math.floor(Math.random() * 9000 + 1000);
-}
-
-// ------------------ Initialize Excel If Missing ------------------
+// ------------------ Create Excel If Missing ------------------
 function ensureExcel() {
   if (!fs.existsSync(excelPath)) {
     const wb = XLSX.utils.book_new();
@@ -35,40 +30,35 @@ function ensureExcel() {
 }
 ensureExcel();
 
-// ------------------ Read Orders ------------------
-function readOrders() {
+// ------------------ Load Orders (Full History) ------------------
+function loadHistory() {
   ensureExcel();
   const workbook = XLSX.readFile(excelPath);
   const sheet = workbook.Sheets["Orders"];
-  if (!sheet) return [];
+  const json = XLSX.utils.sheet_to_json(sheet);
 
-  const data = XLSX.utils.sheet_to_json(sheet);
-
-  return data.map(order => {
+  return json.map(order => {
     try {
       order.items =
         typeof order.items === "string"
           ? JSON.parse(order.items)
-          : Array.isArray(order.items)
-          ? order.items
-          : [];
+          : Array.isArray(order.items) ? order.items : [];
     } catch {
       order.items = [];
     }
 
     order.totalAmount = order.items.reduce(
-      (sum, i) => sum + (Number(i.qty || 0) * Number(i.price || 0)),
+      (sum, i) => sum + i.qty * i.price,
       0
     );
 
     order["Order Status"] = order["Order Status"] || "Pending";
-
     return order;
   });
 }
 
 // ------------------ Save Orders ------------------
-function saveOrders(orders) {
+function saveHistory(orders) {
   const formatted = orders.map(o => ({
     ...o,
     items: JSON.stringify(o.items)
@@ -77,50 +67,27 @@ function saveOrders(orders) {
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.json_to_sheet(formatted);
   XLSX.utils.book_append_sheet(wb, ws, "Orders");
+
   XLSX.writeFile(wb, excelPath);
 }
 
-// ------------------ Append New Order ------------------
-function appendOrder(order) {
-  const orders = readOrders();
-  orders.push(order);
-  saveOrders(orders);
+// ------------------ Generate Tracking ID ------------------
+function generateTrackingID() {
+  return "TID" + Date.now() + Math.floor(Math.random() * 9000 + 1000);
 }
 
-// ------------------ ROUTES ------------------
-app.get("/", (req, res) =>
-  res.send("Server Running. Go to /admin")
-);
-
-app.get("/admin", (req, res) =>
-  res.sendFile(path.join(__dirname, "public/admin.html"))
-);
-
-// ------------ READ ORDERS ------------
-app.get("/api/orders", (req, res) => {
-  res.json(readOrders());
-});
-
-// ------------ CREATE ORDER ------------
+// ------------------ Create Order ------------------
 app.post("/order", (req, res) => {
   const { name, phone, items } = req.body;
 
-  if (!name || !phone || !Array.isArray(items)) {
+  if (!name || !phone || !items) {
     return res.status(400).json({ success: false, error: "Invalid data" });
   }
 
   const trackingId = generateTrackingID();
 
-  const menuNames = {
-    cp100: "Chicken Pickle (100 g)",
-    cp250: "Chicken Pickle (250 g)",
-    gulab: "Gulabjamun (Box of 6)",
-    nuvvula: "Black Nuvvula Laddu (Box of 6)",
-    murukulu: "Murukulu 150 g"
-  };
-
-  const cleanedItems = items.map(i => ({
-    name: menuNames[i.id] || i.name || "Unnamed Item",
+  const updatedItems = items.map(i => ({
+    name: i.name || "Unnamed Item",
     qty: Number(i.qty) || 1,
     price: Number(i.price) || 0
   }));
@@ -128,99 +95,77 @@ app.post("/order", (req, res) => {
   const newOrder = {
     name,
     phone,
-    items: cleanedItems,
-    totalAmount: cleanedItems.reduce(
-      (sum, i) => sum + i.qty * i.price,
-      0
-    ),
+    items: updatedItems,
+    totalAmount: updatedItems.reduce((s, i) => s + i.qty * i.price, 0),
     "Tracking ID": trackingId,
     "Order Status": "Pending",
     createdAt: new Date().toISOString()
   };
 
-  appendOrder(newOrder);
+  const history = loadHistory();
+  history.push(newOrder);
+  saveHistory(history);
 
   io.emit("new-order", newOrder);
 
-  res.json({ success: true, orderId: trackingId });
+  res.json({ success: true, trackingId });
 });
 
-// ------------ UPDATE STATUS ------------
-app.post("/update-status", (req, res) => {
-  const { trackingId, newStatus } = req.body;
+// ------------------ Order Tracking API ------------------
+app.get("/track/:id", (req, res) => {
+  const id = req.params.id;
+  const history = loadHistory();
 
-  if (!trackingId || !newStatus) {
-    return res.json({ success: false, error: "Missing data" });
-  }
-
-  let orders = readOrders();
-  let updated = false;
-
-  orders = orders.map(o => {
-    if (o["Tracking ID"] === trackingId) {
-      o["Order Status"] = newStatus;
-      updated = true;
-    }
-    return o;
-  });
-
-  if (!updated) {
-    return res.json({ success: false, error: "Tracking ID not found" });
-  }
-
-  saveOrders(orders);
-  io.emit("all-orders", orders);
-
-  res.json({ success: true });
-});
-
-// ------------ DOWNLOAD EXCEL ------------
-app.get("/download-excel", (req, res) => {
-  res.download(excelPath, "orders.xlsx");
-});
-
-// ------------ CLEAR ORDERS (SAFE) ------------
-app.post("/clear-orders", (req, res) => {
-  try {
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet([]);
-    XLSX.utils.book_append_sheet(wb, ws, "Orders");
-    XLSX.writeFile(wb, excelPath);
-
-    io.emit("all-orders", []);
-
-    res.json({ success: true, message: "All orders cleared successfully" });
-  } catch (err) {
-    res.json({ success: false, error: "Failed to clear orders" });
-  }
-});
-
-// ------------ TRACK ORDER (NO AUTO REFRESH) ------------
-app.get("/track/:trackingId", (req, res) => {
-  const trackingId = req.params.trackingId;
-  const orders = readOrders();
-
-  const order = orders.find(
-    o =>
-      o["Tracking ID"] === trackingId ||
-      o.trackingId === trackingId ||
-      o.orderId === trackingId
-  );
+  const order = history.find(o => o["Tracking ID"] === id);
 
   if (!order) {
-    return res.status(404).json({ success: false, error: "Invalid Tracking ID" });
+    return res.json({ success: false, error: "Order not found" });
   }
 
   res.json({ success: true, order });
 });
 
-// ------------ SOCKET.IO ------------
-io.on("connection", socket => {
-  console.log("Client Connected");
-  socket.emit("all-orders", readOrders());
+// ------------------ ADMIN: Get All Orders ------------------
+app.get("/api/orders", (req, res) => {
+  res.json(loadHistory());
 });
 
-// ------------ START SERVER ------------
+// ------------------ ADMIN: Update Status ------------------
+app.post("/update-status", (req, res) => {
+  const { trackingId, newStatus } = req.body;
+
+  const history = loadHistory();
+  const index = history.findIndex(o => o["Tracking ID"] === trackingId);
+
+  if (index === -1) {
+    return res.json({ success: false, error: "Tracking ID not found" });
+  }
+
+  history[index]["Order Status"] = newStatus;
+  saveHistory(history);
+
+  io.emit("all-orders", history);
+
+  res.json({ success: true });
+});
+
+// ------------------ Clear Orders (Admin Only) ------------------
+app.post("/clear-orders", (req, res) => {
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet([]);
+  XLSX.utils.book_append_sheet(wb, ws, "Orders");
+  XLSX.writeFile(wb, excelPath);
+  io.emit("all-orders", []);
+  res.json({ success: true });
+});
+
+// ------------------ SOCKET.IO ------------------
+io.on("connection", socket => {
+  console.log("Client Connected");
+  socket.emit("all-orders", loadHistory());
+});
+
+// ------------------ START SERVER ------------------
 server.listen(PORT, () =>
   console.log(`Server running at http://localhost:${PORT}`)
 );
