@@ -42,7 +42,9 @@ function loadHistory() {
       order.items =
         typeof order.items === "string"
           ? JSON.parse(order.items)
-          : Array.isArray(order.items) ? order.items : [];
+          : Array.isArray(order.items)
+          ? order.items
+          : [];
     } catch {
       order.items = [];
     }
@@ -107,8 +109,8 @@ app.post("/order", (req, res) => {
   saveHistory(history);
 
   io.emit("new-order", newOrder);
-res.json({ success: true, orderId: trackingId });
 
+  res.json({ success: true, orderId: trackingId });
 });
 
 // ------------------ Order Tracking API ------------------
@@ -121,8 +123,8 @@ app.get("/track/:id", (req, res) => {
   if (!order) {
     return res.json({ success: false, error: "Order not found" });
   }
-res.json({ success: true, orderId: trackingId });
 
+  res.json({ success: true, order });
 });
 
 // ------------------ ADMIN: Get All Orders ------------------
@@ -146,8 +148,7 @@ app.post("/update-status", (req, res) => {
 
   io.emit("all-orders", history);
 
- res.json({ success: true, orderId: trackingId });
-
+  res.json({ success: true });
 });
 
 // ------------------ Clear Orders (Admin Only) ------------------
