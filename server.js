@@ -24,6 +24,15 @@ app.get("/admin", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "admin.html"));
 });
 
+// ------------------ Serve Tracking Page (IMPORTANT FIX) ------------------
+app.get("/track", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "track.html"));
+});
+
+app.get("/track/:id", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "track.html"));
+});
+
 // ------------------ Create Excel If Missing ------------------
 function ensureExcel() {
   if (!fs.existsSync(excelPath)) {
@@ -116,8 +125,8 @@ app.post("/order", (req, res) => {
   res.json({ success: true, orderId: trackingId });
 });
 
-// ------------------ Tracking API ------------------
-app.get("/track/:id", (req, res) => {
+// ------------------ Tracking API FIXED ------------------
+app.get("/api/track/:id", (req, res) => {
   const id = req.params.id;
   const history = loadHistory();
 
