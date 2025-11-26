@@ -19,12 +19,16 @@ const excelPath = path.join(__dirname, EXCEL_FILE);
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-// ------------------ Serve Admin Page ------------------
+// =======================
+//     ADMIN PAGE
+// =======================
 app.get("/admin", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "admin.html"));
 });
 
-// ------------------ Serve Tracking Page (IMPORTANT FIX) ------------------
+// =======================
+//     TRACKING PAGE FIX
+// =======================
 app.get("/track", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "track.html"));
 });
@@ -33,7 +37,9 @@ app.get("/track/:id", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "track.html"));
 });
 
-// ------------------ Create Excel If Missing ------------------
+// =======================
+//   CREATE EXCEL IF MISSING
+// =======================
 function ensureExcel() {
   if (!fs.existsSync(excelPath)) {
     const wb = XLSX.utils.book_new();
@@ -44,7 +50,9 @@ function ensureExcel() {
 }
 ensureExcel();
 
-// ------------------ Load Orders ------------------
+// =======================
+//      LOAD ORDERS
+// =======================
 function loadHistory() {
   ensureExcel();
   const workbook = XLSX.readFile(excelPath);
@@ -71,7 +79,9 @@ function loadHistory() {
   });
 }
 
-// ------------------ Save Orders ------------------
+// =======================
+//      SAVE ORDERS
+// =======================
 function saveHistory(orders) {
   const formatted = orders.map(o => ({
     ...o,
@@ -85,12 +95,16 @@ function saveHistory(orders) {
   XLSX.writeFile(wb, excelPath);
 }
 
-// ------------------ Generate Tracking ID ------------------
+// =======================
+//   GENERATE TRACKING ID
+// =======================
 function generateTrackingID() {
   return "TID" + Date.now() + Math.floor(Math.random() * 9000 + 1000);
 }
 
-// ------------------ Create Order ------------------
+// =======================
+//     CREATE ORDER
+// =======================
 app.post("/order", (req, res) => {
   const { name, phone, items } = req.body;
 
@@ -125,7 +139,9 @@ app.post("/order", (req, res) => {
   res.json({ success: true, orderId: trackingId });
 });
 
-// ------------------ Tracking API FIXED ------------------
+// =======================
+//     TRACK ORDER API
+// =======================
 app.get("/api/track/:id", (req, res) => {
   const id = req.params.id;
   const history = loadHistory();
@@ -139,12 +155,16 @@ app.get("/api/track/:id", (req, res) => {
   res.json({ success: true, order });
 });
 
-// ------------------ Get All Orders (Admin) ------------------
+// =======================
+//     ADMIN — GET ALL ORDERS
+// =======================
 app.get("/api/orders", (req, res) => {
   res.json(loadHistory());
 });
 
-// ------------------ Update Status (Admin) ------------------
+// =======================
+//     ADMIN — UPDATE STATUS
+// =======================
 app.post("/update-status", (req, res) => {
   const { trackingId, newStatus } = req.body;
 
@@ -163,7 +183,9 @@ app.post("/update-status", (req, res) => {
   res.json({ success: true });
 });
 
-// ------------------ Clear Orders (Admin) ------------------
+// =======================
+//     ADMIN — CLEAR ALL ORDERS
+// =======================
 app.post("/clear-orders", (req, res) => {
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.json_to_sheet([]);
@@ -174,13 +196,37 @@ app.post("/clear-orders", (req, res) => {
   res.json({ success: true });
 });
 
-// ------------------ SOCKET.IO ------------------
+// =======================
+//   FIX — DOWNLOAD EXCEL
+// =======================
+app.get("/download-excel", (req, res) => {
+  if (!fs.existsSync(excelPath)) {
+    return res.status(404).send("Excel file not found.");
+  }
+
+  res.setHeader(
+    "Content-Disposition",
+    "attachment; filename=orders.xlsx"
+  );
+  res.setHeader(
+    "Content-Type",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  );
+
+  res.download(excelPath);
+});
+
+// =======================
+//      SOCKET.IO
+// =======================
 io.on("connection", socket => {
   console.log("Client Connected");
   socket.emit("all-orders", loadHistory());
 });
 
-// ------------------ START SERVER ------------------
+// =======================
+//     START SERVER
+// =======================
 server.listen(PORT, () =>
   console.log(`Server running at http://localhost:${PORT}`)
 );
